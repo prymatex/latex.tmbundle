@@ -1,4 +1,4 @@
-#!/System/Library/Frameworks/Ruby.framework/Versions/1.8/usr/bin/ruby
+#!/usr/bin/env ruby
 require ENV["TM_BUNDLE_SUPPORT"] + "/lib/LaTeXUtils.rb"
 phrase = ENV['TM_CURRENT_WORD']
 include LaTeX
