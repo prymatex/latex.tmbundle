@@ -3,8 +3,8 @@ require 'pathname'
 # The LaTeX module contains a lot of methods useful when dealing with LaTeX
 # files.
 #
-# Author:: Charilaos Skiadas
-# Date:: 12/21/2006
+# Authors:: Charilaos Skiadas, René Schwaiger
+# Date::    2014-09-28
 module LaTeX
   # Simple conversion of bib field names to a simpler form
   def e_var(name)
@@ -29,7 +29,7 @@ module LaTeX
     end
     opts
   end
-  
+
   # Returns the root file for the given filepath
   # If no master exists, return the given filepath
   # Stop searching after 10 iterations, in case of loop
@@ -47,16 +47,16 @@ module LaTeX
     end
     master.to_s
   end
-  # Implements general methods that give information about the LaTeX document. 
+  # Implements general methods that give information about the LaTeX document.
   # Most of these commands recurse into \included files.
   class <<self
-    # Returns an array of the label names. If you want actual Label objects, 
+    # Returns an array of the label names. If you want actual Label objects,
     # then use FileScanner.label_scan
     def get_labels
       mFile = LaTeX.master(ENV["TM_LATEX_MASTER"] || ENV["TM_FILEPATH"])
       return FileScanner.label_scan(mFile).map{|i| i.label}.sort
     end
-    # Returns an array of the citation objects. If you only want the citekeys, 
+    # Returns an array of the citation objects. If you only want the citekeys,
     # use LaTeX.get_citekeys
     def get_citations
       mFile = LaTeX.master(ENV["TM_LATEX_MASTER"] || ENV["TM_FILEPATH"])
@@ -71,11 +71,7 @@ module LaTeX
       # First try directly
       return "" if ENV['PATH'].split(':').find { |dir| File.exists? File.join(dir, 'kpsewhich') }
       # Then try some specific paths
-      locs = ["/usr/texbin/",
-              "/usr/local/teTeX/bin/powerpc-apple-darwin-current/",
-              "/usr/local/teTeX/bin/i386-darwin/",
-              "/usr/local/teTeX/bin/i386-apple-darwin-current/",
-              "/opt/local/bin/"]
+      locs = ["/usr/texbin/", "/opt/local/bin/"]
       locs.each do |loc|
         return loc if File.exist?(loc+"kpsewhich")
       end
@@ -88,7 +84,7 @@ module LaTeX
     # +relative+ determines an explicit path that should be included in the
     # paths to look at when searching for the file. This will typically be the
     # path to the root document.
-    
+
     # TODO: The following method should probably be simplified dramatically
     def find_file(filename, extension, relative)
       filename.gsub!(/"/,"")
@@ -101,9 +97,9 @@ module LaTeX
       @@paths[extension] ||= ([`#{texpath}kpsewhich -show-path=#{extension}`.chomp.split(/:!!|:/)].flatten.map{|i| i.sub(/\/*$/,'/')}).unshift(relative).unshift("")
       @@paths[extension].each do |path|
         testpath = File.expand_path(File.join(path,filename + "." + extension))
-        return testpath if File.exist?(testpath)
+        return testpath if File.exist?(testpath) && !File.directory?(testpath)
         testpath = File.expand_path(File.join(path,filename))
-        return testpath if File.exist?(testpath)
+        return testpath if File.exist?(testpath) && !File.directory?(testpath)
       end
       return nil
     end
@@ -189,7 +185,10 @@ module LaTeX
     # Default values for the +includes+ hash.
     def set_defaults
       @includes = Hash.new
-      @includes[/^[^%]*(?:\\include|\\input)\s*\{([^}\\]*)\}/] = Proc.new {|m|
+      # We ignore inputs and includes containing a hash since these are
+      # usually used as arguments inside macros e.g. `#1` to access the first
+      # argument of a macro
+      @includes[/^[^%]*(?:\\include|\\input)\s*\{([^}\\#]*)\}/] = Proc.new {|m|
         m[0].split(",").map do |it|
           LaTeX.find_file( it.strip, "tex", File.dirname(@root) ) || raise("Could not locate any file named '#{it}'")
         end
@@ -211,7 +210,7 @@ module LaTeX
                scanner.recursive_scan
              end
            end
-           extractors.each_pair { |regexp,block| 
+           extractors.each_pair { |regexp,block|
              line.scan(regexp).each do |m|
                block.call(root,index,m,text)
              end
@@ -225,10 +224,10 @@ module LaTeX
       # LaTeX.set_paths
       labelsList = Array.new
       scanner = FileScanner.new(root)
-      scanner.extractors[/.*?\[.*label=(.*?)\,.*\]/] = Proc.new do |filename, line, groups, text| 
+      scanner.extractors[/.*?\[.*label=(.*?)\,.*\]/] = Proc.new do |filename, line, groups, text|
         labelsList << Label.new(:file => filename, :line => line, :label => groups[0], :contents => text)
       end
-      scanner.extractors[/^[^%]*\\label\{([^\}]*)\}/] = Proc.new do |filename, line, groups, text| 
+      scanner.extractors[/^[^%]*\\label\{([^\}]*)\}/] = Proc.new do |filename, line, groups, text|
         labelsList << Label.new(:file => filename, :line => line, :label => groups[0], :contents => text)
       end
       scanner.recursive_scan
@@ -240,8 +239,10 @@ module LaTeX
       citationsList = Array.new
       scanner = FileScanner.new(root)
       bibitem_regexp = /^[^%]*\\bibitem(?:\[[^\]]*\])?\{([^\}]*)\}(.*)/
-      biblio_regexp = /^[^%]*\\bibliography\s*\{([^\}]*)\}/
-      addbib_regexp = /^[^%]*\\addbibresource\s*\{([^\}]*)\}/
+      # We ignore bibliography files located on Windows drives by not matching
+      # any path which starts with a single letter followed by a “:” e.g.: “c:”
+      biblio_regexp = /^[^%]*\\bibliography\s*\{(?![a-zA-Z]:)([^\}]*)\}/
+      addbib_regexp = /^[^%]*\\addbibresource\s*\{(?![a-zA-Z]:)([^\}]*)\}/
       scanner.extractors[bibitem_regexp] = Proc.new do |filename, line, groups, text|
       citationsList << Citation.new( "citekey" => groups[0], "cite_data" => groups[1])
       end

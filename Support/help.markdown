@@ -20,13 +20,13 @@ Depending on the setting of the Keep log window open preference, this window may
 
 Because LaTeX processes files in a single pass, it is often required to compile more than once to resolve all references, or possibly even run `bibtex` and/or `makeindex` in-between. You can re-run LaTeX on the same file by clicking on the Run LaTeX button at the bottom of the Typeset & View window.  You will also find buttons there to allow you to run BibTeX or MakeIndex on the current file.
 
-In addition, The `latexmk.pl` script does all the compiling necessary for things to be right. In order to tell TextMate to use `latexmk.pl` when compiling, you have to check the `Use Latexmk.pl`.
+In addition, The `latexmk` script does all the compiling necessary for things to be right. In order to tell TextMate to use `latexmk` when compiling, you have to check the `Use Latexmk`.
 
 <!-- NOT NECESSARY ANY MORE: See [9.2 Static Variables](?static_variables) in the TextMate manual for how to setup environment variables. -->
 
-<!-- Note further, that if you have some other complicated compiling system, using a makefile for example, you can use that instead of `latexmk.pl`. You can use the variable `TM_LATEX_OPTIONS` to set command line options for your script. -->
+<!-- Note further, that if you have some other complicated compiling system, using a makefile for example, you can use that instead of `latexmk`. You can use the variable `TM_LATEX_OPTIONS` to set command line options for your script. -->
 
-<!-- Probably not relevant any more: TODO: Update this section if a new command is created for `latexmk.pl` -->
+<!-- Probably not relevant any more: TODO: Update this section if a new command is created for `latexmk` -->
 
 ## Using a Master File
 
@@ -42,7 +42,7 @@ This allows, among other things, creating folder specific variables for scratch 
 
 When the `TM_LATEX_MASTER` variable is set, then all LaTeX commands use the master file pointed to by this variable as their basis. In particular, the `Typeset & View` and `Watch document` commands will typeset the master file, instead of whatever the currently active file is. So you can freely edit whatever chapter you are working on, and when you want to see the result you just press `⌘R` without having to worry about switching to the master file. The error window that may show up is arranged so that clicking any of the errors opens up the corresponding `\include`'d file where the error occurred, and places the caret at the appropriate location.
 
-There is a way to arrange it so that the individual chapters can be compiled by themselves, and still work fine when included via the `\include` command. If that is something that might interest you, then [this thread from the mailing list][included-chapters] might interest you. 
+There is a way to arrange it so that the individual chapters can be compiled by themselves, and still work fine when included via the `\include` command. If that is something that might interest you, then [this thread from the mailing list][included-chapters] might interest you.
 
 TODO: Mention that `TM_LATEX_MASTER` can be relative to the project directory (or directory of current file) -- this way one can set it in the global preferences if one always use the same name of the master file.
 
@@ -58,7 +58,7 @@ TextMate also supports embedded directives in your TeX file by placing a line at
 ### Introduction
 
 When you watch a LaTeX document, it is continually monitored for changes.
-When you save a change, the document will be typeset again, and the preview updated. The preamble (i.e. everything before the `\begin{document}` command) is recompiled only when you change it; the rest of the time, only the main body of the document is recompiled. So the update cycle is substantially faster than typesetting the whole document from scratch.
+When you save a change, the document will be typeset again, and the preview updated.
 
 ### Usage
 
@@ -90,14 +90,13 @@ To avoid this open the preferences for Adobe Reader and go to the Internet categ
 
 ## External Previewers
 
-You can also setup an external previewer for showing the PDF output. Focus will then switch to that previewer. Any program that opens PDF files will do, but there are three standard options, Apple's own Preview,  [TeXniscope][], or [Skim][].  Skim is a very nice viewer that is under active development.
+You can also setup an external previewer for showing the PDF output. Focus will then switch to that previewer. Any program that opens PDF files will do, but there are two standard options, Apple's own Preview, and [Skim][].  Skim is a very nice viewer that is under active development.
 
-We recommend you use either Skim, if you are only going to be dealing with pdf files, or TeXniscope if you will also be dealing with dvi files. They both support pdfsync, though TeXniscope is not a universal binary as of this writing.
+We recommend you use Skim, which supports pdfsync.
 
 To use one of these previewers, you must set the Viewer preference in the Preferences panel.
 
 [texshop]: http://www.uoregon.edu/~koch/texshop/
-[texniscope]: http://www.ing.unipi.it/~d9615/homepage/texniscope.html
 [skim]: http://skim-app.sourceforge.net/
 
 ## Preview Options
@@ -110,11 +109,11 @@ Preview options are somewhat complicated depending on the viewer you choose.  Th
 2. If you use an external viewer then the `Typeset & View` window will automatically close if there are no errors or warnings, unless the “keep log window open” preference is checked.
 
 ## Refreshing the Viewer
-The `Typeset & View (PDF)` command uses a short Applescript to tell Skim, TeXniscope, or the TeXShop viewers to reload the pdf file once ALL the typesetting is complete.  This is more efficient than enabling the auto-refresh feature in the viewers because it often takes more than one run of LaTeX before the document is really ready to view.  In that case most viewers would try to reload the pdf multiple times.
+The `Typeset & View (PDF)` command uses a short Applescript to tell Skim, or the TeXShop viewer to reload the pdf file once ALL the typesetting is complete.  This is more efficient than enabling the auto-refresh feature in the viewers because it often takes more than one run of LaTeX before the document is really ready to view.  In that case most viewers would try to reload the pdf multiple times.
 
 # PDFSync
 
-The [pdfsync][] package allows you to easily hop back and forth between the document and generated PDF version, granted you use an external previewer which supports pdfsync. In the following we will assume the use of TeXniscope or Skim.
+The [pdfsync][] package allows you to easily hop back and forth between the document and generated PDF version, granted you use an external previewer which supports pdfsync. In the following we will assume the use of Skim.
 
 [pdfsync]: http://itexmac.sourceforge.net/pdfsync.html
 
@@ -128,21 +127,11 @@ You need to perform the following steps to enable synchronization:
 
  2. Set your viewer to `Skim`. This enables you to use the `Show in PDFViewer (pdfsync)` command bound to `⌃⌥⌘O` by default.
 
- 3. In TeXniscope go to the preferences. There, set the following two options:
+ 3. In `Skim` go to the preferences. There, choose the Preset `TextMate` under the option `Sync`.
 
-        Editor: mate
-        Editor options: -l %line "%file"
-In Skim these are already set by default.
+    This assumes that you have installed `mate` (see Help → mate and rmate… in TextMate). After this is done, shift-command-clicking (⇧⌘) at a location in the PDF file (as shown in Skim) should take you to the corresponding location in TextMate.
 
-    This assumes that you have installed `mate` (see Help → Terminal Usage… in TextMate). You may want to provide a full path to `mate` if it is not found by TeXniscope. After this is done, command-clicking (⌘) at a location in the PDF file (as shown in TeXniscope/Skim) should take you to the corresponding location in TextMate.
-
-**Note 1:** PDFSync does not work when your filename contains a space.
-
-**Note 2:** The granularity of the synchronization data is generally “per paragraph”, so going from TextMate to TeXniscope or back will generally locate just the paragraph nearest your desired position.
-
-**Note 3:** Problems have been reported with the universal build of TeXniscope. So Intel users may want to run TeXniscope under Rosetta, or use Skim instead.
-
-**Note 4:** In Skim, you need to shift-command-click, instead of command-clicking, to be taken back to TextMate.
+**Note:** The granularity of the synchronization data is generally “per paragraph”, so going from TextMate to Skim or back will generally locate just the paragraph nearest your desired position.
 
 # Working With LaTeX
 
@@ -246,7 +235,7 @@ In order for all this to work, make sure that the language for the document is s
 
 ### Drag and Drop
 
-There are two key drag and drop commands in LaTeX: 
+There are two key drag and drop commands in LaTeX:
 
 * You can drag an image file in to the document and have it surrounded by a complete figure environment. Using the modifier key `⌥` while dragging inserts the image inside a `center` environment. Using `⇧` instead inserts only the `\includegraphics` line.
 * You can drag in another .tex file to have that file added to your document with an `\include` command.
@@ -274,12 +263,12 @@ You can bring up the Preferences panel for LaTeX by running the Preferences comm
 * *Default Engine:*  You can choose a typesetting engine from the dropdown list.  Note:  This engine is the fallback engine.  The LaTeX `Typeset & View` command can override the default in two ways:
   + If you use a `%!TEX TS-program = ` directive in your source file. (See below)
   + If you include packages that indicate you should use plain LaTeX, or xeLaTeX
-  
+
 * *Options:*  If you have specific options that you will usually want to pass to the engine you have selected you can set them here.  Note:  If you have options that are specific to a single file you are better off to use the `%!TEX TS-options = ` directive at the top of your source file.
 
-* *Use Latexmk.pl:*   TextMate includes the popular latexmmk.pl script which automatically runs latex, bibtex, and makeindex as many times as needed to resolve all cross references and citations in your file.  To use latexmk.pl just check this box.
+* *Use Latexmk:*   TextMate supports the popular latexmk script which automatically runs latex, bibtex, and makeindex as many times as needed to resolve all cross references and citations in your file.  To use latexmk just check this box.
 
-Latexmk.pl will use the engine and any options you specify in the preferences window, or any `%!TEX` directives in an individual file.
+Latexmk will use the engine and any options you specify in the preferences window, or any `%!TEX` directives in an individual file.
 
 * *Verbose TeX output:*  If you want to see the raw LaTeX log file in real time, check this box.
 
@@ -304,6 +293,6 @@ The best way to set local options is to use the `%!TEX` directives.  They are as
 
 # Credits
 
-There were at least two or possibly three versions of a LaTeX bundle floating around in the early days of TextMate by (I think): Normand Mousseau, Gaetan Le Guelvouit and Andrew Ellis At some point, January 2005, Eric Hsu pulled together the threads into one package. From then on there have been contributions by Sune Foldager, Brad Miller, Allan Odgaard, Jeroen van der Ham, Robin Houston and Haris Skiadas. 
+There were at least two or possibly three versions of a LaTeX bundle floating around in the early days of TextMate by (I think): Normand Mousseau, Gaetan Le Guelvouit and Andrew Ellis At some point, January 2005, Eric Hsu pulled together the threads into one package. From then on there have been contributions by Sune Foldager, Brad Miller, Allan Odgaard, Jeroen van der Ham, Robin Houston and Haris Skiadas.
 
 Happy LaTeXing!
