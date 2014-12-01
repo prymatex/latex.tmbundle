@@ -40,14 +40,16 @@ from os import chdir, getcwd, getenv, putenv, remove, EX_OSFILE  # noqa
 from os.path import (basename, dirname, exists, getmtime, isfile, join,
                      normpath, realpath)
 from pickle import load, dump
-from re import compile, match, sub
+from pipes import quote as shellquote
+from re import compile, match, search
 from subprocess import call, check_output, Popen, PIPE, STDOUT
 from sys import exit, stdout
 from textwrap import dedent
 from urllib import quote
 
-from texparser import (BibTexParser, BiberParser, ChkTexParser, LaTexParser,
-                       MakeGlossariesParser, MakeIndexParser, LaTexMkParser)
+from texparser import (update_marks, BibTexParser, BiberParser, ChkTexParser,
+                       LaTexParser, MakeGlossariesParser, MakeIndexParser,
+                       LaTexMkParser)
 from tmprefs import Preferences
 
 # -- Module Import ------------------------------------------------------------
@@ -93,8 +95,8 @@ def expand_name(filename, program='pdflatex'):
 
     """
     stdout.flush()
-    run_object = Popen("kpsewhich -progname='{}' '{}'".format(
-        program, filename), shell=True, stdout=PIPE)
+    run_object = Popen("kpsewhich -progname='{}' {}".format(
+        program, shellquote(filename)), shell=True, stdout=PIPE)
     return run_object.stdout.read().strip()
 
 
@@ -147,8 +149,9 @@ def run_bibtex(filename, verbose=False):
     stat, fatal, errors, warnings = 0, False, 0, 0
     for bib in auxfiles:
         print('<h4>Processing: {} </h4>'.format(bib))
-        run_object = Popen("bibtex '{}'".format(bib), shell=True, stdout=PIPE,
-                           stdin=PIPE, stderr=STDOUT, close_fds=True)
+        run_object = Popen("bibtex {}".format(shellquote(bib)), shell=True,
+                           stdout=PIPE, stdin=PIPE, stderr=STDOUT,
+                           close_fds=True)
         bp = BibTexParser(run_object.stdout, verbose)
         f, e, w = bp.parse_stream()
         fatal |= f
@@ -175,7 +178,7 @@ def run_biber(filename, verbose=False):
         >>> chdir('../..')
 
     """
-    run_object = Popen("biber '{}'".format(filename), shell=True,
+    run_object = Popen("biber {}".format(shellquote(filename)), shell=True,
                        stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True)
     bp = BiberParser(run_object.stdout, verbose)
     fatal, errors, warnings = bp.parse_stream()
@@ -183,7 +186,7 @@ def run_biber(filename, verbose=False):
     return stat, fatal, errors, warnings
 
 
-def run_latex(ltxcmd, texfile, verbose=False):
+def run_latex(ltxcmd, texfile, cache_filename, verbose=False):
     """Run the flavor of latex specified by ltxcmd on texfile.
 
     This function returns:
@@ -199,6 +202,12 @@ def run_latex(ltxcmd, texfile, verbose=False):
 
     Arguments:
 
+        cache_filename
+
+            The path to the cache file for the current tex project. This file
+            is used to store information about gutter marks between runs of
+            ``texmate``.
+
         ltxcmd
 
             The latex command which should be used translate ``texfile``.
@@ -213,6 +222,7 @@ def run_latex(ltxcmd, texfile, verbose=False):
 
         >>> chdir('Tests/TeX')
         >>> run_latex(ltxcmd='pdflatex',
+        ...           cache_filename='.external_bibliography.lb',
         ...           texfile='external_bibliography.tex') # doctest:+ELLIPSIS
         <h4>...
         ...
@@ -220,12 +230,13 @@ def run_latex(ltxcmd, texfile, verbose=False):
         >>> chdir('../..')
 
     """
-    run_object = Popen("{} '{}'".format(ltxcmd, texfile), shell=True,
-                       stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True)
+    run_object = Popen("{} {}".format(ltxcmd, shellquote(texfile)),
+                       shell=True, stdout=PIPE, stdin=PIPE, stderr=STDOUT,
+                       close_fds=True)
     lp = LaTexParser(run_object.stdout, verbose, texfile)
     fatal, errors, warnings = lp.parse_stream()
     stat = run_object.wait()
-    update_marks([(texfile, 'error'), (texfile, 'warning')], lp.marks)
+    update_marks(cache_filename, lp.marks)
     return stat, fatal, errors, warnings
 
 
@@ -260,9 +271,9 @@ def run_makeindex(filename, verbose=False):
         >>> chdir('../..')
 
     """
-    run_object = Popen("makeindex '{}.idx'".format(
-                       get_filename_without_extension(filename)), shell=True,
-                       stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True)
+    run_object = Popen("makeindex {}".format(shellquote("{}.idx".format(
+        get_filename_without_extension(filename)))), shell=True,
+        stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True)
     ip = MakeIndexParser(run_object.stdout, verbose)
     fatal, errors, warnings = ip.parse_stream()
     stat = run_object.wait()
@@ -298,9 +309,10 @@ def run_makeglossaries(filename, verbose=False):
         >>> chdir('../..')
 
     """
-    run_object = Popen("makeglossaries '{}'".format(
-                       get_filename_without_extension(filename)), shell=True,
-                       stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True)
+    run_object = Popen("makeglossaries {}".format(
+                       shellquote(get_filename_without_extension(filename))),
+                       shell=True, stdout=PIPE, stdin=PIPE, stderr=STDOUT,
+                       close_fds=True)
     bp = MakeGlossariesParser(run_object.stdout, verbose)
     fatal, errors, warnings = bp.parse_stream()
     stat = run_object.wait()
@@ -361,8 +373,7 @@ def get_app_path_and_sync_command(viewer, path_pdf, path_tex_file,
 
         path_pdf:
 
-            The path to the PDF file generated from the tex file located at
-            ``path_tex_file``.
+            The path to the generated PDF file.
 
         path_tex_file
 
@@ -380,7 +391,7 @@ def get_app_path_and_sync_command(viewer, path_pdf, path_tex_file,
         >>> get_app_path_and_sync_command('Skim', 'test.pdf', 'test.tex', 1)
         ...     # doctest:+ELLIPSIS +NORMALIZE_WHITESPACE
         ('.../Skim.app',
-         "'.../Skim.app/.../displayline' 1 'test.pdf' 'test.tex'")
+         "'.../Skim.app/.../displayline' 1 test.pdf test.tex")
 
         # Preview has no pdfsync support
         >>> get_app_path_and_sync_command('Preview', 'test.pdf', 'test.tex', 1)
@@ -391,12 +402,13 @@ def get_app_path_and_sync_command(viewer, path_pdf, path_tex_file,
     path_to_viewer = get_app_path(viewer)
     if path_to_viewer and viewer == 'Skim':
         sync_command = ("'{}/Contents/SharedSupport/displayline' ".format(
-                        path_to_viewer) + "{} '{}' '{}'".format(line_number,
-                        path_pdf, path_tex_file))
+                        path_to_viewer) + "{} {} {}".format(line_number,
+                        shellquote(path_pdf), shellquote(path_tex_file)))
     return path_to_viewer, sync_command
 
 
-def refresh_viewer(viewer, pdf_path):
+def refresh_viewer(viewer, pdf_path,
+                   tm_bundle_support=getenv('TM_BUNDLE_SUPPORT')):
     """Tell the specified PDF viewer to refresh the PDF output.
 
     If the viewer does not support refreshing PDFs (e.g. “Preview”) then this
@@ -415,29 +427,32 @@ def refresh_viewer(viewer, pdf_path):
 
             The path to the PDF file for which we want to refresh the output.
 
+        tm_bundle_support
+
+            The location of the “LaTeX Bundle” support folder
+
     Returns: ``int``
 
     Examples:
 
-        >>> refresh_viewer('Skim', 'test.pdf')
+        >>> refresh_viewer('Skim', 'test.pdf',
+        ...                tm_bundle_support=realpath('Support'))
         <p class="info">Tell Skim to refresh 'test.pdf'</p>
         0
 
     """
     print('<p class="info">Tell {} to refresh \'{}\'</p>').format(viewer,
                                                                   pdf_path)
-    if viewer == 'Skim':
-        return call("osascript -e 'tell application \"{}\" ".format(viewer) +
-                    "to revert (documents whose path is " +
-                    "\"{}\")'".format(pdf_path), shell=True)
-    elif viewer == 'TeXShop':
-        return call("osascript -e 'tell application \"{}\" ".format(viewer) +
-                    "to tell documents whose path is " +
-                    "\"{}\" to refreshpdf'".format(pdf_path), shell=True)
+
+    if viewer in ['Skim', 'TeXShop']:
+        return call("'{}/bin/refresh_viewer.scpt' {} {} ".format(
+                    tm_bundle_support, viewer, shellquote(pdf_path)),
+                    shell=True)
     return 1
 
 
-def run_viewer(viewer, file_name, file_path, suppress_pdf_output_textmate,
+def run_viewer(viewer, texfile_path, pdffile_path,
+               suppress_pdf_output_textmate,
                use_pdfsync, line_number,
                tm_bundle_support=getenv('TM_BUNDLE_SUPPORT')):
     """Open the PDF viewer containing the PDF generated from ``file_name``.
@@ -453,13 +468,9 @@ def run_viewer(viewer, file_name, file_path, suppress_pdf_output_textmate,
 
             Specifies which PDF viewer should be used to display the PDF
 
-        file_name
+        tex_file_path
 
-            The file name of the tex or pdf file.
-
-        file_path
-
-            The path to the folder which contains the tex file
+            The location of the tex file.
 
         suppress_pdf_output_textmate
 
@@ -478,7 +489,7 @@ def run_viewer(viewer, file_name, file_path, suppress_pdf_output_textmate,
         >>> chdir('Tests/TeX')
         >>> call("pdflatex makeindex.tex > /dev/null", shell=True)
         0
-        >>> run_viewer('Skim', 'makeindex.tex', '.',
+        >>> run_viewer('Skim', './makeindex.tex', './makeindex.pdf',
         ...            suppress_pdf_output_textmate=None, use_pdfsync=True,
         ...            line_number=10,
         ...            tm_bundle_support=realpath('../../Support'))
@@ -487,34 +498,32 @@ def run_viewer(viewer, file_name, file_path, suppress_pdf_output_textmate,
 
     """
     status = 0
-    path_file = "{}/{}".format(file_path, file_name)
-    path_pdf = "{}/{}.pdf".format(file_path,
-                                  get_filename_without_extension(file_name))
 
     if viewer == 'TextMate':
         if not suppress_pdf_output_textmate:
-            if isfile(path_pdf):
+            if isfile(pdffile_path):
                 print('''<script type="text/javascript">
                          window.location="file://{}"
-                         </script>'''.format(quote(path_pdf)))
+                         </script>'''.format(quote(pdffile_path)))
             else:
-                print("File does not exist: '{}'".format(path_pdf))
+                print("File does not exist: {}".format(pdffile_path))
     else:
         path_to_viewer, sync_command = get_app_path_and_sync_command(
-            viewer, path_pdf, path_file, line_number)
+            viewer, pdffile_path, texfile_path, line_number)
         # PDF viewer is installed
         if path_to_viewer:
             # If this is not done, the next line will thrown an encoding
             # exception when the PDF file contains non-ASCII characters.
             viewer = viewer.encode('utf-8')
             pdf_already_open = not(bool(
-                call("'{}/bin/check_open' '{}' '{}' > /dev/null".format(
-                     tm_bundle_support, viewer, path_pdf), shell=True)))
+                call("'{}/bin/check_open' '{}' {} > /dev/null".format(
+                     tm_bundle_support, viewer, shellquote(pdffile_path)),
+                     shell=True)))
             if pdf_already_open:
-                refresh_viewer(viewer, path_pdf)
+                refresh_viewer(viewer, pdffile_path)
             else:
-                status = call("open -a '{}.app' '{}'".format(viewer, path_pdf),
-                              shell=True)
+                status = call("open -a '{}.app' {}".format(viewer,
+                              shellquote(pdffile_path)), shell=True)
             # PDF viewer supports pdfsync
             if sync_command and use_pdfsync:
                 call(sync_command, shell=True)
@@ -995,85 +1004,10 @@ def write_latexmkrc(engine, options, location='/tmp/latexmkrc'):
 
     """
     with open("/tmp/latexmkrc", 'w') as latexmkrc:
-        # The code for adding the dependencies for `makeglossaries` is taken
-        # from http://tex.stackexchange.com/posts/21088/revisions
         latexmkrc.write(dedent("""\
         $latex = 'latex -interaction=nonstopmode -file-line-error-style {0}';
         $pdflatex = '{1} -interaction=nonstopmode -file-line-error-style {0}';
-
-        add_cus_dep('glo', 'gls', 0, 'makeglo2gls');
-        add_cus_dep('acn', 'acr', 0, 'makeglo2gls');
-        sub makeglo2gls {{
-            system("makeglossaries $_[0]");
-        }}
         """.format(options, engine)))
-
-
-def update_marks(marks_to_remove=[], marks_to_set=[]):
-    """Set or remove gutter marks.
-
-    This function starts by removing marks from the files specified in
-    ``remove_marks``. After that it sets all marks specified in
-    ``marks_to_set``.
-
-    marks_to_remove
-
-        A list of tuples containing the path to a file where a certain mark
-        should be removed.
-
-    marks_to_set
-
-        A list of tuples of the form ``(file_path, line_number, marker_type,
-        message)``, where file_path and line_number specify the location where
-        a marker of type ``marker_type`` together with an optional message
-        should be placed.
-
-    Examples:
-
-        >>> marks_to_set = [('Tests/TeX/lualatex.tex', 1, 'note',
-        ...                  'Lua was created in 1993.'),
-        ...                 ('Tests/TeX/lualatex.tex', 4, 'warning',
-        ...                  'Lua means "Moon" in Portuguese.'),
-        ...                 ('Tests/TeX/lualatex.tex', 6, 'error', None)]
-        >>> marks_to_remove = [('Tests/TeX/lualatex.tex', 'note'),
-        ...                    ('Tests/TeX/lualatex.tex', 'warning'),
-        ...                    ('Tests/TeX/lualatex.tex', 'error')]
-        >>> update_marks(marks_to_remove, marks_to_set)
-        >>> update_marks(marks_to_remove)
-
-    """
-    marks_remove = {}
-    for filepath, mark in marks_to_remove:
-        path = normpath(realpath(filepath))
-        marks = marks_remove.get(path)
-        if marks:
-            marks.append(mark)
-        else:
-            marks_remove[path] = [mark]
-
-    marks_add = {}
-    for filepath, line, mark, message in marks_to_set:
-        path = normpath(realpath(filepath))
-        marks = marks_add.get(path)
-        if marks:
-            marks.append((line, mark, message))
-        else:
-            marks_add[path] = [(line, mark, message)]
-
-    commands = {filepath: 'mate {}'.format(' '.join(['-c {}'.format(mark) for
-                                                     mark in marks]))
-                for filepath, marks in marks_remove.iteritems()}
-
-    for filepath, markers in marks_add.iteritems():
-        command = ' '.join(['-l {} -s {}{}'.format(line, mark,
-                                                   ":'{}'".format(message) if
-                                                   message else '')
-                            for line, mark, message in markers])
-        commands[filepath] = '{} {}'.format(commands.get(filepath, 'mate'),
-                                            command)
-
-    for filepath, command in commands.iteritems():
-        call("{} '{}'".format(command, filepath), shell=True)
 
 
 def get_typesetting_data(filepath, tm_engine,
@@ -1110,52 +1044,70 @@ def get_typesetting_data(filepath, tm_engine,
         >>> chdir(current_directory)
 
     """
+    def get_cached_data():
+        """Get current data and update cache."""
+        cache_read = False
+        typesetting_data = {}
 
-    filepath = normpath(realpath(filepath))
-    cache_filename = '/tmp/{}.pickle'.format(sub('[ /.]', '', filepath))
-
-    try:
-        # Try to read from cache
-        if(getmtime(cache_filename) > getmtime(filepath)):
+        try:
             with open(cache_filename, 'rb') as storage:
                 typesetting_data = load(storage)
-                chdir(typesetting_data['file_path'])
-        else:
-            raise Exception()
-    except:
-        # Get data and save it in the cache
-        typesetting_directives = find_tex_directives(filepath)
-        filename, file_path = find_file_to_typeset(typesetting_directives,
-                                                   tex_file=filepath)
-        file_without_suffix = get_filename_without_extension(filename)
-        chdir(file_path)
+                cache_read = True
 
-        packages = find_tex_packages(filename)
-        engine = construct_engine_command(typesetting_directives, tm_engine,
-                                          packages)
+            cache_data_outdated = (getmtime(file_path) <
+                                   getmtime(cache_filename) >
+                                   getmtime(filepath))
 
-        synctex = not(bool(call("{} --help | grep -q synctex".format(engine),
-                           shell=True)))
+            # Write new cache data if the current data does not contain
+            # the necessary up to date information - This might be the case if
+            # only `texparser` has written to the cache file
+            if not 'engine' in typesetting_data or cache_data_outdated:
+                raise Exception()
 
-        texinputs = ('{}:'.format(getenv('TEXINPUTS')) if getenv('TEXINPUTS')
-                     else '.::')
-        texinputs += "{}/tex//".format(tm_bundle_support)
+        except:
+            # Get data and save it in the cache
+            packages = find_tex_packages(filename)
+            engine = construct_engine_command(typesetting_directives,
+                                              tm_engine, packages)
+            synctex = not(bool(call("{} --help | grep -q synctex".format(
+                                    engine), shell=True)))
+            typesetting_data.update({'engine': engine,
+                                     'packages': packages,
+                                     'synctex': synctex})
+            if not cache_read:
+                typesetting_data['files_with_guttermarks'] = {filename}
 
-        typesetting_data = {'engine': engine,
-                            'filename': filename,
-                            'file_path': file_path,
-                            'file_without_suffix': file_without_suffix,
-                            'packages': packages,
-                            'synctex': synctex,
-                            'texinputs': texinputs,
-                            'typesetting_directives': typesetting_directives}
         try:
             with open(cache_filename, 'wb') as storage:
                 dump(typesetting_data, storage)
         except:
-            print('<p class="warning"> Could not write cache file!<p>')
+            print('<p class="warning"> Could not write cache file!</p>')
 
-    putenv('TEXINPUTS', typesetting_data['texinputs'])
+        return typesetting_data
+
+    filepath = normpath(realpath(filepath))
+    typesetting_directives = find_tex_directives(filepath)
+    filename, file_path = find_file_to_typeset(typesetting_directives,
+                                               tex_file=filepath)
+    file_without_suffix = get_filename_without_extension(filename)
+    chdir(file_path)
+    cache_filename = '.{}.lb'.format(file_without_suffix)
+    typesetting_data = get_cached_data()
+
+    # We add the tex files in the bundle directory to the possible input
+    # files. If `TEXINPUTS` was not set before then we also add the current
+    # directory `.` and the central default repository `::` to the start
+    # of `TEXINPUTS`
+    texinputs = "{}:{}/tex//".format(
+        getenv('TEXINPUTS') if getenv('TEXINPUTS') else '.::',
+        tm_bundle_support)
+    putenv('TEXINPUTS', texinputs)
+
+    typesetting_data.update({'cache_filename': cache_filename,
+                             'filename': filename,
+                             'file_path': file_path,
+                             'file_without_suffix': file_without_suffix,
+                             'typesetting_directives': typesetting_directives})
 
     return typesetting_data
 
@@ -1297,6 +1249,7 @@ if __name__ == '__main__':
                                             tm_bundle_support)
 
     typesetting_directives = typesetting_data['typesetting_directives']
+    cache_filename = typesetting_data['cache_filename']
     filename = typesetting_data['filename']
     file_path = typesetting_data['file_path']
     file_without_suffix = typesetting_data['file_without_suffix']
@@ -1304,16 +1257,19 @@ if __name__ == '__main__':
     engine = typesetting_data['engine']
     synctex = typesetting_data['synctex']
 
+    pdffile_path = "{}/{}.pdf".format(file_path, file_without_suffix)
+
     if command == "version":
         process = Popen("{} --version".format(engine), stdout=PIPE, shell=True)
         print(process.stdout.readline().rstrip('\n'))
         exit()
 
-    # Print out header information to begin the run
-    if first_run:
-        print('<div id="commandOutput"><div id="preText">')
-    else:
-        print('<hr>')
+    if command != 'sync':
+        # Print out header information to begin the run
+        if first_run:
+            print('<div id="commandOutput"><div id="preText">')
+        else:
+            print('<hr>')
 
     if filename == file_without_suffix:
         print("<h2 class='warning'>Warning: LaTeX file has no extension. " +
@@ -1324,25 +1280,33 @@ if __name__ == '__main__':
               "synctex but you have included pdfsync. You can safely remove " +
               "\usepackage{pdfsync}</p>")
 
+    problematic_characters = search('[$"]', filename)
+    if problematic_characters:
+        print('''<p class="error"><strong>
+                 The filename {0} contains a problematic character: {1}<br>
+                 Please remove all occurrences of {1} in the filename.
+                 </strong></p>
+              '''.format(filename, problematic_characters.group(0)))
     # Run the command passed on the command line or modified by preferences
-    if command == 'latexmk':
+    elif command == 'latexmk':
         engine_options = construct_engine_options(typesetting_directives,
                                                   tm_engine_options, synctex)
         write_latexmkrc(engine, engine_options, '/tmp/latexmkrc')
-        command = "latexmk -pdf{} -f -r /tmp/latexmkrc '{}'".format(
-            'ps' if engine == 'latex' else '', filename)
+        latexmkrc_path = "{}/config/latexmkrc".format(tm_bundle_support)
+        command = "latexmk -pdf{} -f -r /tmp/latexmkrc -r {} {}".format(
+            'ps' if engine == 'latex' else '', shellquote(latexmkrc_path),
+            shellquote(filename))
         process = Popen(command, shell=True, stdout=PIPE, stdin=PIPE,
                         stderr=STDOUT, close_fds=True)
         command_parser = LaTexMkParser(process.stdout, verbose, filename)
         status = command_parser.parse_stream()
-        update_marks([(filename, 'error'), (filename, 'warning')],
-                     command_parser.marks)
+        update_marks(cache_filename, command_parser.marks)
         fatal_error, number_errors, number_warnings = status
         tex_status = process.wait()
         remove("/tmp/latexmkrc")
         if tm_autoview and number_errors < 1 and not suppress_viewer:
             viewer_status = run_viewer(
-                viewer, filename, file_path,
+                viewer, filepath, pdffile_path,
                 number_errors > 1 or number_warnings > 0
                 and tm_preferences['latexKeepLogWin'],
                 'pdfsync' in packages or synctex, line_number)
@@ -1361,9 +1325,10 @@ if __name__ == '__main__':
         tex_status, fatal_error, number_errors, number_warnings = status
 
     elif command == 'clean':
-        auxiliary_file_regex = ('.*\.(acr|alg|aux|bbl|bcf|blg|fdb_latexmk|' +
-                                'fls|fmt|glg|gls|ini|log|out|maf|mtc|mtc1|' +
-                                'pdfsync|run.xml|synctex.gz|toc)$')
+        auxiliary_file_regex = (
+            '.*\.(acn|acr|alg|aux|bbl|bcf|blg|fdb_latexmk|fls|fmt|glg|glo|gls|'
+            'idx|ilg|ind|ini|ist|lb|log|out|maf|mtc|mtc1|pdfsync|run.xml|'
+            'synctex.gz|toc)$')
         command = ("find -E . -maxdepth 1 -type f -regex " +
                    "'{}' -delete -print".format(auxiliary_file_regex))
         removed_files = check_output(command, shell=True).strip()
@@ -1379,7 +1344,7 @@ if __name__ == '__main__':
         engine_options = construct_engine_options(typesetting_directives,
                                                   tm_engine_options, synctex)
         command = "{} {}".format(engine, engine_options)
-        status = run_latex(command, filename, verbose)
+        status = run_latex(command, filename, cache_filename, verbose)
         tex_status, fatal_error, number_errors, number_warnings = status
         number_runs = 1
 
@@ -1389,14 +1354,14 @@ if __name__ == '__main__':
             call("ps2pdf '{}.ps'".format(file_without_suffix), shell=True)
         if tm_autoview and number_errors < 1 and not suppress_viewer:
             viewer_status = run_viewer(
-                viewer, filename, file_path,
+                viewer, filepath, pdffile_path,
                 number_errors > 1 or number_warnings > 0 and
                 tm_preferences['latexKeepLogWin'],
                 'pdfsync' in packages or synctex, line_number)
 
     elif command == 'view' and not suppress_viewer:
         viewer_status = run_viewer(
-            viewer, filename, file_path,
+            viewer, filepath, pdffile_path,
             number_errors > 1 or number_warnings > 0 and
             tm_preferences['latexKeepLogWin'],
             'pdfsync' in packages or synctex, line_number)
@@ -1404,13 +1369,12 @@ if __name__ == '__main__':
     elif command == 'sync':
         if 'pdfsync' in packages or synctex:
             _, sync_command = get_app_path_and_sync_command(
-                viewer, '{}.pdf'.format(file_without_suffix), filename,
-                line_number)
+                viewer, pdffile_path, filepath, line_number)
             if sync_command:
                 viewer_status = call(sync_command, shell=True)
             else:
-                print("{} does not support pdfsync".format(viewer))
-                viewer_status = 1
+                print("The viewer {} does not support pdfsync".format(viewer))
+                exit(EXIT_SHOW_TOOL_TIP)
 
         else:
             print("Either you need to include `pdfsync.sty` in your document" +

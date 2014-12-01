@@ -1,7 +1,7 @@
 #! /usr/bin/perl
 
 # LaTeX Watch,
-our $VERSION = "3.5";
+our $VERSION = "3.7";
 
 #  - by Robin Houston, 2007, 2008.
 #  - by René Schwaiger, 2014
@@ -45,6 +45,7 @@ my %prefs = get_prefs();
 my ( $mode, $viewer_option, $viewer, @tex );
 
 @tex = qw(latexmk -interaction=nonstopmode);
+push( @tex, "-r '$ENV{TM_BUNDLE_SUPPORT}/config/latexmkrc'" );
 if ( $prefs{engine} eq 'latex' ) {
     $mode = "PS";
 
@@ -66,17 +67,9 @@ elsif ($prefs{engine} eq "lualatex"
     || $prefs{engine} eq "xelatex" )
 {
     $mode = "PDF";
-    push( @tex, qw(-pdf) );
-
-    if ( $prefs{engine} eq "pdflatex" ) {
-        push( @tex, "-pdflatex=pdflatex $prefs{options} -synctex=1" );
-    }
-    elsif ( $prefs{engine} eq "lualatex" ) {
-        push( @tex, "-pdflatex=lualatex $prefs{options} -synctex=1" );
-    }
-    else {
-        push( @tex, "-pdflatex=xelatex $prefs{options} -synctex=1" );
-    }
+    push( @tex,
+            "-pdf -pdflatex='$prefs{engine} $prefs{options} -synctex=1 "
+          . "-file-line-error-style'" );
 
     if ( $prefs{viewer} eq 'TextMate' ) {
         print "Latex Watch: Cannot use TextMate to preview.",
@@ -282,6 +275,7 @@ sub main_loop {
         if ( document_has_changed() ) {
             debug_msg("Reloading file");
             compile() and view();
+            parse_log();
             if ( defined($progressbar_pid) ) {
                 debug_msg("Closing progress bar window ($progressbar_pid)");
                 kill( 9, $progressbar_pid )
@@ -319,9 +313,12 @@ sub clean_up {
     debug_msg("Cleaning up");
     unlink(
         map( "$wd/$name.$_",
-            qw(aux bbl bcf blg fdb_latexmk fls fmt ini latexmk.log log maf mtc
-              mtc1 out pdfsync run.xml synctex.gz toc) )
+            qw(acn acr alg aux bbl bcf blg fdb_latexmk fls fmt glo glg gls idx
+              ilg ind ini ist latexmk.log log maf mtc mtc1 out pdfsync
+              run.xml synctex.gz toc) )
     ) if defined($wd);
+    # Remove LaTeX bundle cache file
+    unlink("$wd/.$name.lb") if defined($wd);
 
     $cleanup_viewer->() if defined $cleanup_viewer;
     if ( defined($progressbar_pid) ) {
@@ -450,6 +447,7 @@ sub compile {
         sub {
             if ( $? == 1 || $? == 2 || $? == 12 ) {
                 # An error in the document
+                parse_log();
                 offer_to_show_log();
                 $error = 1;
             }
@@ -482,6 +480,10 @@ sub compile {
             return;      # Failure
         }
     }
+}
+
+sub parse_log {
+    fail_unless_system( "texparser.py", "$name.latexmk.log", "$wd/$name" );
 }
 
 sub offer_to_show_log {
@@ -1030,3 +1032,12 @@ Changes
 
 3.5:
     - Remove support for TeXniscope
+
+3.6:
+    - Support engine options
+
+      Add support for options like `--shell-escape`. You can specify these
+      options inside the preferences of the LaTeX bundle. (Nemesit Amasis)
+
+3.7:
+    - Use the bundles `latexmkrc` file

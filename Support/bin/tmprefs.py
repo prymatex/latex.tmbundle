@@ -1,107 +1,105 @@
-import os
-import newplistlib as plistlib
-import string
+# -- Imports ------------------------------------------------------------------
 
-try:
-    from Foundation import NSDictionary
-    haspyobjc = True
-except:
-    haspyobjc = False
+from Foundation import NSDictionary
+from os import environ
+from plistlib import writePlistToString
+from subprocess import PIPE, STDOUT, Popen
 
 
-try:
-    from subprocess import *
-except:
-    PIPE = 1
-    STDOUT=1
-    class Popen(object):
-        """Popen:  This class provides backward compatibility for Tiger
-           Do not assume anything about this works other than access
-           to stdin, stdout and the wait method."""
-        def __init__(self, command, **kwargs):
-            super(Popen, self).__init__()
-            self.command = command
-            self.stdin, self.stdout = os.popen4(command)
-
-        def wait(self):
-            stat = self.stdout.close()
-            return stat
-
-# The preference file for textmate to retrieve the prefs from
-if os.environ.has_key('TM_APP_IDENTIFIER'):
-    TM_PREFERENCE_FILE = os.environ['TM_APP_IDENTIFIER'] + '.plist'
-else:
-    TM_PREFERENCE_FILE = 'com.macromates.textmate.plist'
+# -- Class --------------------------------------------------------------------
 
 class Preferences(object):
-    """docstring for Preferences"""
+    """Process the current preferences of the LaTeX bundle.
+
+    This class reads the LaTeX preferences and provides a dictionary-like
+    interface to process them.
+
+    """
+
     def __init__(self):
-        super(Preferences, self).__init__()
-        self.defaults = {
-            'latexAutoView' : 1,
-            'latexEngine' : "pdflatex",
-            'latexEngineOptions' : "",
-            'latexVerbose' : 0,
-            'latexUselatexmk' : 0,
-            'latexViewer' : "TextMate",
-            'latexKeepLogWin' : 1,
-            'latexDebug' : 0,
-        }
-        self.prefs = self.defaults.copy()
-        self.prefs.update(self.readTMPrefs())
+        """Create a new Preferences object from the current settings.
 
-    def __getitem__(self,key):
-        """docstring for __getitem__"""
-        return self.prefs.get(key,None)
+        Examples:
 
-    def readTMPrefs(self):
-        """readTMPrefs reads the textmate preferences file and constructs a python dictionary.
-        The keys that are important for latex are as follows:
-        latexAutoView = 0
-        latexEngine = pdflatex
-        latexEngineOptions = "-interaction=nonstopmode -file-line-error-style"
-        latexUselatexmk = 0
-        latexViewer = Skim
+            >>> preferences = Preferences()
+            >>> keys = ['latexViewer', 'latexEngine', 'latexUselatexmk',
+            ...         'latexVerbose', 'latexDebug', 'latexAutoView',
+            ...         'latexKeepLogWin', 'latexEngineOptions']
+            >>> all([key in preferences.prefs for key in keys])
+            True
+
         """
-        # ugly as this is it is the only way I have found so far to convert a binary plist file into something
-        # decent in Python without requiring the PyObjC module.  I would prefer to use popen but
-        # plutil apparently tries to do something to /dev/stdout which causes an error message to be appended
-        # to the output.
-        #
-        plDict = {}
-        if haspyobjc:
-            plDict = NSDictionary.dictionaryWithContentsOfFile_(os.environ["HOME"]+"/Library/Preferences/" + TM_PREFERENCE_FILE)
-        else:   # TODO remove all this once everyone is on leopard
-            os.system("plutil -convert xml1 \"$HOME/Library/Preferences/"+TM_PREFERENCE_FILE+"\" -o /tmp/tmltxprefs1.plist")
-            null_tt = "".join([chr(i) for i in range(256)])
-            non_printables = null_tt.translate(null_tt, string.printable)
-            plist_str = open('/tmp/tmltxprefs1.plist').read()
-            plist_str = plist_str.translate(null_tt,non_printables)
-            try:
-                plDict = plistlib.readPlistFromString(plist_str)
-            except:
-                print '<p class="error">There was a problem reading the preferences file, continuing with defaults</p>'
-            try:
-                os.remove("/tmp/tmltxprefs1.plist")
-            except:
-                print '<p class="error">Problem removing temporary prefs file</p>'
-        return plDict
+        tm_preference_file = ('{}.plist'.format(environ['TM_APP_IDENTIFIER'])
+                              if 'TM_APP_IDENTIFIER' in environ
+                              else 'com.macromates.textmate.plist')
+        self.default_values = {
+            'latexAutoView': 1,
+            'latexEngine': "pdflatex",
+            'latexEngineOptions': "",
+            'latexVerbose': 0,
+            'latexUselatexmk': 0,
+            'latexViewer': "TextMate",
+            'latexKeepLogWin': 1,
+            'latexDebug': 0,
+        }
+        self.prefs = self.default_values.copy()
+        tm_prefs = NSDictionary.dictionaryWithContentsOfFile_(
+            "{}/Library/Preferences/{}".format(environ["HOME"],
+                                               tm_preference_file))
+        # Only save the values we really need
+        for key in self.prefs:
+            if key in tm_prefs:
+                self.prefs[key] = tm_prefs[key]
 
-    def toDefString(self):
-        """docstring for toDefString"""
-        instr = plistlib.writePlistToString(self.defaults)
-        runObj = Popen('pl',shell=True,stdout=PIPE,stdin=PIPE,stderr=STDOUT,close_fds=True)
-        runObj.stdin.write(instr)
-        runObj.stdin.close()
-        defstr = runObj.stdout.read()
-        return defstr.replace("\n","")
+    def __getitem__(self, key):
+        """Return a value stored inside Preferences.
+
+        If the value is no defined then ``None`` will be returned.
+
+        Arguments:
+
+            key
+
+                The key of the value that should be returned
+
+        Examples:
+
+            >>> preferences = Preferences()
+            >>> preferences['latexEngine'].find('tex') >= 0
+            True
+            >>> isinstance(preferences['latexUselatexmk'], bool)
+            True
+
+        """
+        return self.prefs.get(key, None)
+
+    def defaults(self):
+        """Return a string containing the default preference values.
+
+        Returns: ``str``
+
+        Examples:
+
+            >>> preferences = Preferences()
+            >>> preferences.defaults() # doctest:+NORMALIZE_WHITESPACE
+            '{ latexAutoView = 1;
+               latexDebug = 0;
+               latexEngine = pdflatex;
+               latexEngineOptions = "";
+               latexKeepLogWin = 1;
+               latexUselatexmk = 0;
+               latexVerbose = 0;
+               latexViewer = TextMate;}'
+
+        """
+        instr = writePlistToString(self.default_values)
+        process = Popen('pl', shell=True, stdout=PIPE, stdin=PIPE,
+                        stderr=STDOUT, close_fds=True)
+        process.stdin.write(instr)
+        process.stdin.close()
+        defstr = process.stdout.read()
+        return defstr.replace('\n', '')
 
 if __name__ == '__main__':
-    test = Preferences()
-    print test.toDefString()
-    print test['latexUselatexmk']
-    print test['Foo']
-    useLatexMk = test['latexUselatexmk']
-    print useLatexMk
-
-
+    from doctest import testmod
+    testmod()

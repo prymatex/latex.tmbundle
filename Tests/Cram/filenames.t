@@ -2,25 +2,24 @@
 
   $ cd "$TESTDIR";
   $ source setup_cram.sh
-  $ cd ../TeX
+  $ cd ../TeX/
 
 -- Tests ----------------------------------------------------------------------
 
-We test if the root directive (%!TEX root) works. This means that although we
-call typesetting on a certain file, we translate the file specified as
-`root`.
+Test if using file names containing special characters works
 
-  $ TM_FILEPATH="input/packages_input1.tex"
+  $ texmate.py -suppressview latex -latexmk yes -engine pdflatex \
+  > c\'mplicated\ filename.tex | grep 'Output written' | countlines
+  1
 
-Just try to translate the program using `latex`. The root file is
-`packages.tex`
-
-  $ texmate.py -s latex -latexmk no | grep 'packages.tex' | countlines
+  $ texmate.py -suppressview latex \"balanced\ quotes\".tex \
+  > | grep '"balanced quotes".tex contains a problematic character: "' \
+  > | countlines
   1
 
 Check if clean removes all auxiliary files.
 
-  $ texmate.py clean > /dev/null
+  $ texmate.py clean c\'mplicated\ filename.tex > /dev/null
   $ ls | grep -E $auxiliary_files_regex
   [1]
 
@@ -30,6 +29,6 @@ Restore the file changes made by previous commands.
 
   $ restore_aux_files_git
 
-Remove the generated PDF files
+Remove the generated PDF
 
   $ rm -f *.pdf
