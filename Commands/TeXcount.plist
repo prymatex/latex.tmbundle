@@ -9,7 +9,12 @@
 [[ -f "${TM_SUPPORT_PATH}/lib/bash_init.sh" ]] &amp;&amp; \
 . "${TM_SUPPORT_PATH}/lib/bash_init.sh"
 
-texcount -nocol -utf8 - &lt; "$TM_FILEPATH" | sed "1 d"</string>
+DIRECTORY=$(dirname "${TM_FILEPATH}")
+FILENAME=$(basename "${TM_FILEPATH}")
+OPTIONS=($TM_TEXCOUNT_OPTIONS)
+cd "$DIRECTORY"
+
+texcount -nocol -utf8 -inc "${OPTIONS[@]}" "$FILENAME"</string>
 	<key>input</key>
 	<string>none</string>
 	<key>inputFormat</key>
