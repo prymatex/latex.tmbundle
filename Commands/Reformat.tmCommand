@@ -1,54 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>beforeRunningCommand</key>
 	<string>nop</string>
 	<key>command</key>
-	<string>#!/usr/bin/env ruby18
-require 'pp'
-lines = STDIN.read
-s = lines.slice!(/^.*?\}\s*\n/)
-# Place any \hline's not on a line of their own in their own line
-lines.gsub!(/(\\hline\s*)(?!\n)/,"\\hline\\\\\\\\")
-lines = lines.split(/\\\\/)
-data = lines.map do |line|
-  line.split(/&amp;/).map{|i| i.strip}
-end
-cols = data.map{|i| i.length}.max
-widths = []
-cols.times do |i|
-  widths &lt;&lt; data.inject(0) do |maximum,line| if line.length &lt;= i then maximum else [maximum,line[i].length].max end end
-end
-pattern = widths.map{|i| "%#{i}s"}.join(" &amp; ")
-print s.chomp
-prev=false
-for line in data do
-  print(prev ? "\\\\\n" : "\n")
-  if line.length &lt;= 1 then
-    print line
-    prev=false
-  else
-    line.fill("",(line.length+1)..cols)
-    printf(pattern,*line)
-    prev=true
-  end
-end
-print "\n"
-</string>
+	<string>#!/usr/bin/env ruby
+
+# -- Imports -------------------------------------------------------------------
+
+require ENV['TM_BUNDLE_SUPPORT'] + '/bin/format_table'
+
+# -- Main ----------------------------------------------------------------------
+
+reformat(STDIN.read)</string>
 	<key>fallbackInput</key>
 	<string>scope</string>
 	<key>input</key>
 	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
 	<key>keyEquivalent</key>
 	<string>^&amp;</string>
 	<key>name</key>
 	<string>Reformat</string>
-	<key>output</key>
-	<string>replaceSelectedText</string>
+	<key>outputCaret</key>
+	<string>heuristic</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>replaceInput</string>
 	<key>scope</key>
 	<string>text.tex.latex meta.data.environment.tabular.latex</string>
 	<key>uuid</key>
 	<string>FB412036-2D62-41A3-BDFA-F897933132AA</string>
+	<key>version</key>
+	<integer>2</integer>
 </dict>
 </plist>

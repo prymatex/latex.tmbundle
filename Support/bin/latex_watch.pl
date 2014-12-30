@@ -150,15 +150,17 @@ sub guess_tex_engine {
     open( my $fh, "<", @_ )
       or die "cannot open @_: $!";
 
+    my $engine = "";
     # TS-program is case insensitive e.g. `LaTeX` should be the same as `latex`
     my $engines = "(?i)latex|lualatex|pdflatex|xelatex(?-i)";
     while ( my $line = <$fh> ) {
         if ( $line =~ /%!TEX(?:\s+)(?:TS-)program(?:\s*)=(?:\s*)($engines)/ ) {
-            return lc("$1");
-            close($fh);
+            $engine = lc($1);
+            last;
         }
     }
-    return "";
+    close($fh);
+    return $engine;
 }
 
 sub get_prefs {
@@ -263,7 +265,8 @@ sub parse_file_path {
 }
 
 # Persistent state
-my ( %files_mtimes, $cleanup_viewer, $ping_viewer );
+my ( %files_mtimes, $cleanup_viewer, $ping_viewer, $notification_token,
+    $typesetting_errors );
 
 #############
 # Main loop #
@@ -271,11 +274,14 @@ my ( %files_mtimes, $cleanup_viewer, $ping_viewer );
 
 sub main_loop {
     my $ping_counter = 10;
+    $typesetting_errors = 0;
+    $notification_token = '';
     while (1) {
         if ( document_has_changed() ) {
             debug_msg("Reloading file");
-            compile() and view();
-            parse_log();
+            my ($output_exists, $error) = compile();
+            view() if $output_exists;
+            parse_log($error);
             if ( defined($progressbar_pid) ) {
                 debug_msg("Closing progress bar window ($progressbar_pid)");
                 kill( 9, $progressbar_pid )
@@ -314,8 +320,8 @@ sub clean_up {
     unlink(
         map( "$wd/$name.$_",
             qw(acn acr alg aux bbl bcf blg fdb_latexmk fls fmt glo glg gls idx
-              ilg ind ini ist latexmk.log log maf mtc mtc1 out pdfsync
-              run.xml synctex.gz toc) )
+              ilg ind ini ist latexmk.log log maf mtc mtc1 nav out pdfsync
+              run.xml snm synctex.gz toc) )
     ) if defined($wd);
     # Remove LaTeX bundle cache file
     unlink("$wd/.$name.lb") if defined($wd);
@@ -325,6 +331,7 @@ sub clean_up {
         debug_msg("Closing progress bar window as part of cleanup");
         kill( 9, $progressbar_pid );
     }
+    close_notification_window() if defined($notification_token);
     if ( defined $name ) {
         unlink "$wd/.$name.watcher_pid"    # Do this last
           or debug_msg("Failed to unlink $wd/.$name.watcher_pid: $!");
@@ -447,8 +454,7 @@ sub compile {
         sub {
             if ( $? == 1 || $? == 2 || $? == 12 ) {
                 # An error in the document
-                parse_log();
-                offer_to_show_log();
+                debug_msg("Typesetting command failed with error code $?\n");
                 $error = 1;
             }
             else {
@@ -464,44 +470,86 @@ sub compile {
         if ( -e "$wd/$name.ps" ) {
             $compiled_document      = "$wd/$name.ps";
             $compiled_document_name = "$name.ps";
-            return 1;    # Success!
+            return (1, $error);    # Success!
         }
         else {
-            return;      # Failure
+            return (0, $error);    # Failure
         }
     }
     else {               # PDF mode
         if ( -e "$wd/$name.pdf" ) {
             $compiled_document      = "$wd/$name.pdf";
             $compiled_document_name = "$name.pdf";
-            return 1;    # Success!
+            return (1, $error);    # Success!
         }
         else {
-            return;      # Failure
+            return (0, $error);    # Failure
         }
     }
 }
 
 sub parse_log {
-    fail_unless_system( "texparser.py", "$name.latexmk.log", "$wd/$name" );
+    my $error   = shift;
+    my $logname = "$name.latexmk.log";
+
+    if ($error) {
+
+        # An error occurred during typesetting
+
+        $typesetting_errors = 1;
+        my $texparser_command = "texparser.py '$logname' "
+          . "'$wd/$name' -notify $notification_token";
+        my $output = `$texparser_command`;
+        $output =~ /.*Notification\ Token:\ \|(\d+)\|/;
+        $notification_token = $1;
+    }
+    elsif ( file_has_min_lines( "$logname", 4 ) ) {
+
+        # The state has changed since last time and there are no errors. We
+        # check for state changes by looking at the log. The log produced by
+        # `latexmk` will be about 3 lines long if there were no changes in the
+        # document. If there were any significant changes then the log should be
+        # longer than that.
+
+        $typesetting_errors = 0;
+        close_notification_window();
+        fail_unless_system( "texparser.py", "$logname", "$wd/$name" );
+
+    }
+    elsif ($typesetting_errors) {
+
+        # We might have closed the notification window although there still
+        # were errors. Lets reopen it if it was closed
+
+        my $open_windows  = `"$ENV{DIALOG}" nib --list`;
+        my $window_closed = 1;
+
+        for ( split /^/, $open_windows ) {
+            debug_msg( "Line:", $_ );
+            if (/^$notification_token/) {
+                $window_closed = 0;
+                last;
+            }
+        }
+
+        if ($window_closed) {
+            debug_msg(
+                "Window $notification_token closed." . " Opening new window." );
+
+            my $output = `texparser.py '$logname' '$wd/$name' -notify reload`;
+            $output =~ /.*Notification\ Token:\ \|(\d+)\|/;
+            $notification_token = $1;
+        }
+
+    }
 }
 
-sub offer_to_show_log {
-    my $button = cocoa_dialog(
-        "msgbox",
-        "--title" => "LaTeX Watch: compilation error",
-        "--text"  => "Error compiling $name.tex",
-        "--informative-text" =>
-          "TeX gave an error compiling the file. Shall I show the log?",
-        "--button1" => "Show Log",
-        "--button2" => "Don’t Show"
-    );
-    show_log() if $button == 1;
-}
-
-sub show_log {
-    # OK button pressed
-    fail_unless_system( "mate", "$wd/$name.latexmk.log" );
+sub close_notification_window {
+    if ( $notification_token ne '' ) {
+        fail_unless_system( "$ENV{DIALOG}", "nib", "--dispose",
+            "$notification_token" );
+        $notification_token = '';
+    }
 }
 
 #####################
@@ -868,6 +916,23 @@ sub check_open {
         }
     );
     return $still_open;
+}
+
+sub file_has_min_lines {
+    my $filepath         = shift;
+    my $min_number_lines = shift;
+
+    open( my $fh, "<", $filepath )
+      or die "Can not open $filepath: $!";
+
+    my $lines = 0;
+    while (<$fh>) {
+        last if ( $lines >= $min_number_lines );
+        $lines++;
+    }
+    close($fh);
+
+    return ( $lines >= $min_number_lines );
 }
 
 __END__

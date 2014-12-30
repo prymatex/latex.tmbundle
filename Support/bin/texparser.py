@@ -5,11 +5,11 @@
 
 from argparse import ArgumentParser, FileType
 from re import compile, match, search
-from os import getcwd
+from os import getcwd, getenv
 from os.path import basename, dirname, join, normpath, realpath
 from pickle import load, dump
 from pipes import quote as shellquote
-from subprocess import call
+from subprocess import call, check_output, STDOUT
 from sys import stdout
 from urllib import quote
 
@@ -41,6 +41,74 @@ def make_link(file, line=1):
 
     """
     return "txmt://open/?url=file://{}&line={}".format(quote(file), line)
+
+
+def notify(title='LaTeX Watch', summary='', messages=[], token=None):
+    """Display a list of messages via a notification window.
+
+    This function returns a notification token that can be used to reuse the
+    opened notification window.
+
+    Arguments:
+
+        title
+
+            The (window) title for the notification window.
+
+        summary
+
+            A summary explaining the reasoning why we show this notification
+            window.
+
+        messages
+
+            A list of strings containing informative messages.
+
+        token
+
+            A token that can be used to reuse an already existing notification
+            window.
+
+    Returns: ``int``
+
+    Examples:
+
+        >>> token = notify(summary='Mahatma Gandhi', messages=[
+        ...     "An eye for an eye only ends up making the whole world " +
+        ...     "blind."])
+        >>> # The token the function returns is a number
+        >>> token = int(token)
+
+    """
+    dialog = getenv('DIALOG')
+    tm_support = getenv('TM_SUPPORT_PATH')
+    nib_location = '{}/nibs/SimpleNotificationWindow.nib'.format(tm_support)
+    log = '\n'.join(messages).replace('\\', '\\\\').replace('"', '\\"')
+
+    command = "{} nib".format(shellquote(dialog))
+    content = shellquote(
+        """{{ title = "{}"; summary = "{}"; log = "{}"; }}""".format(
+        title, summary, log))
+
+    # Update notification window
+    if token:
+        command_update = "{} --update {} --model {}".format(
+                         command, token, content)
+        notification_output = check_output(command_update, stderr=STDOUT,
+                                           shell=True)
+        # If the window still exists and we could therefore update it here we
+        # return the token of the old window. If we could not update the
+        # window we get an error message. In this case we try to open a new
+        # notification window.
+        if notification_output.strip() == '':
+            return(int(token))
+
+    # Create new notification window
+    command_load = "{} --load {} --model {}".format(command,
+                   shellquote(nib_location), content)
+    notification_output = check_output(command_load, shell=True)
+
+    return int(notification_output)
 
 
 def update_marks(cache_filename, marks_to_set=[]):
@@ -222,7 +290,7 @@ class TexParser(object):
             if not line:
                 return statement
             statement += line.rstrip('\n')
-            if not (len(line) == 80 and not line[78] in {'!', '.'}):
+            if not (len(line) == 80 and not line[78] in {'!', '.', ')'}):
                 break
         return statement + '\n'
 
@@ -271,7 +339,7 @@ class TexParser(object):
                     found_match = True
                     break
             if self.verbose and not found_match:
-                print(line)
+                print('<p>{}</p>'.format(line))
 
             line = self.get_rewrapped_line()
         if not self.done:
@@ -585,7 +653,7 @@ class LaTexParser(TexParser):
         self.suffix = filename[:filename.rfind('.')]
         self.filename = self.current_file = filename
         # Save gutter marks for errors and warnings
-        self.marks = []
+        self.marks = set()
         self.patterns.extend([
             (compile('^Document Class'), self.info),
             (compile('.*?\(\.\/([^\)]*?\.(tex|{})( |$))'.format(self.suffix)),
@@ -700,21 +768,21 @@ class LaTexParser(TexParser):
 
     def handle_warning(self, matching, line):
         filepath = join(getcwd(), self.current_file)
-        linenumber = matching.group(1)
+        linenumber = int(matching.group(1))
         print('<p class="warning"><a href="{}">{}</a></p>'.format(
               make_link(filepath, linenumber), line))
-        self.marks.append((filepath, linenumber, 'warning', line))
+        self.marks.add((filepath, linenumber, 'warning', line))
         self.number_warnings += 1
 
     def handle_error(self, matching, line):
         filename = matching.group(1)
-        linenumber = matching.group(2)
+        linenumber = int(matching.group(2))
         description = matching.group(3)
         filepath = join(getcwd(), filename)
         print('<p class="error">Latex Error: <a href="' +
               '{}">{}:{}</a> {}</p>'.format(make_link(filepath, linenumber),
                                             filename, linenumber, description))
-        self.marks.append((filepath, linenumber, 'error', description))
+        self.marks.add((filepath, linenumber, 'error', description))
         self.number_errors += 1
         if search('Fatal error', description):
             self.fatal_error = True
@@ -777,7 +845,7 @@ class LaTexMkParser(TexParser):
         """Initialize the regex patterns for the LaTexMkParser."""
         super(LaTexMkParser, self).__init__(input_stream, verbose)
         self.filename = filename
-        self.marks = []
+        self.marks = set()
         self.patterns.extend([
             (compile('This is (pdfTeX|latex2e|latex|LuaTeX|XeTeX)'),
              self.start_latex),
@@ -968,6 +1036,17 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='Parse output from latexmk.')
     parser.add_argument(
+        '-notify', default='', nargs='?',
+        help="""Open a notification window to show warning and error messages.
+                To reuse a notification window already opened, just provide
+                its notification token.
+
+                To open a new window containing old messages stored in the
+                cache provide the argument `reload`. If the cache file does
+                not exist yet or the old messages could not be read for some
+                other reasons, then `reload` will just fail silently.""")
+
+    parser.add_argument(
         'logfile', type=FileType('r'),
         help="""The location of the log file that should be parsed. Use -
                 to read from STDIN.""")
@@ -977,11 +1056,51 @@ if __name__ == '__main__':
                 This has to be the file from which the output in `logfile` was
                 generated.""")
     arguments = parser.parse_args()
+
     logfile = arguments.logfile
+    notification_token = arguments.notify
     texfile = '{}.tex'.format(arguments.file)
     cachefile = '{}/.{}.lb'.format(dirname(arguments.file),
                                    basename(arguments.file))
 
-    texparser = LaTexMkParser(logfile, verbose=False, filename=texfile)
-    texparser.parse_stream()
-    update_marks(cachefile, texparser.marks)
+    if notification_token == 'reload':
+        try:
+            # Try to read from cache
+            with open(cachefile, 'rb') as storage:
+                typesetting_data = load(storage)
+                messages = typesetting_data['messages']
+            notification_token = None
+        except:
+            # Fail silently
+            exit(0)
+    else:
+        texparser = LaTexMkParser(logfile, verbose=False, filename=texfile)
+        texparser.parse_stream()
+        # Sort marks by line number
+        marks = sorted(texparser.marks, key=lambda marks: marks[1])
+        update_marks(cachefile, marks)
+        messages = ["{:<7} {}:{} — {}".format(severity.upper(),
+                    basename(filename), line, message)
+                    for (filename, line, severity, message) in marks]
+        if not messages:
+            messages = [
+                "Could not find any messages containing line information.",
+                "Please take a look at the log file {}.latexmk.log ".format(
+                basename(arguments.file)) +
+                "to find the source of the problem."]
+
+        try:
+            # Try to update data in cache file
+            with open(cachefile, 'r+b') as storage:
+                typesetting_data = load(storage)
+                typesetting_data['messages'] = messages
+                storage.seek(0)
+                dump(typesetting_data, storage)
+        except:
+            print('Could not access cache file {}!'.format(cachefile))
+
+    if notification_token != '':
+        new_token = notify(
+            summary='Errors While Typesetting {}'.format(basename(texfile)),
+            messages=messages, token=notification_token)
+        print("Notification Token: |{}|".format(new_token))
