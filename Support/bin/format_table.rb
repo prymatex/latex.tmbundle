@@ -1,5 +1,18 @@
 #!/usr/bin/env ruby
 
+# doctest: Reformat a table containing only one line
+# >> reformat 'First Item & Second Item'
+# => "\nFirst Item & Second Item\n"
+#
+# doctest: Reformat a table containing an escaped `&` sign
+# >> output = reformat('First Item & Second Item\\\\He \& Ho & Hi')
+# >> expected =
+#    '
+#    First Item & Second Item\\\\
+#      He \& Ho &          Hi
+#    '
+# >> output.eql? expected
+# => true
 def reformat(table_content)
   lines = table_content
   s = lines.slice!(/^.*?\}\s*\n/)
@@ -17,18 +30,18 @@ def reformat(table_content)
     end
   end
   pattern = widths.map { |i| "%#{i}s" }.join(' & ')
-  print s.chomp
+  output = s ? s.chomp : ''
   prev = false
   data.each do |line|
-    print(prev ? "\\\\\n" : "\n")
+    output += prev ? "\\\\\n" : "\n"
     if line.length <= 1
-      print line.join('')
+      output += line.join ''
       prev = false
     else
       line.fill('', (line.length + 1)..cols)
-      printf(pattern, *line)
+      output += sprintf(pattern, *line)
       prev = true
     end
   end
-  print "\n"
+  output + "\n"
 end
