@@ -1,46 +1,93 @@
 #!/usr/bin/env ruby
 
+##
+# Format a latex tabular environment.
+#
+# = Arguments
+#
+# [table_content] A string containing the tabular environment
+#
+# = Output
+#
+# The function returns a string containing a properly formatted latex table.
+#
+# = Examples
+#
 # doctest: Reformat a table containing only one line
-# >> reformat 'First Item & Second Item'
-# => "\nFirst Item & Second Item\n"
+#
+#   >> reformat 'First Item & Second Item'
+#   => "\nFirst Item & Second Item\n"
 #
 # doctest: Reformat a table containing an escaped `&` sign
-# >> output = reformat('First Item & Second Item\\\\He \& Ho & Hi')
-# >> expected =
+#
+#   >> output = reformat('First Item & Second Item\\\\He \& Ho & Hi')
+#   >> expected =
 #    '
 #    First Item & Second Item\\\\
 #      He \& Ho &          Hi
 #    '
-# >> output.eql? expected
-# => true
+#   >> output.eql? expected
+#   => true
+#
+# doctest: Reformat a table containing empty cells
+#
+#   >> output = reformat(' & 2\\\\\\hline & 4 \\\\ Turbostaat & 6')
+#   >> expected =
+#    '
+#               & 2\\\\
+#    \\hline
+#               & 4\\\\
+#    Turbostaat & 6
+#    '
+#   >> output.eql? expected
+#   => true
+#
+# doctest: Reformat a table containing manual spacing
+#
+#   >> output = reformat('1 & 2\\\\[1cm]\hline Three & Four')
+#   >> expected =
+#    '
+#         1 &    2\\\\[1cm]
+#    \\hline
+#     Three & Four
+#    '
+#   >> output.eql? expected
+#   => true
+#
 def reformat(table_content)
-  lines = table_content
-  s = lines.slice!(/^.*?\}\s*\n/)
+  before_table = table_content.slice!(/^.*?\}\s*\n/)
   # Place any \hline's not on a line of their own in their own line
-  lines.gsub!(/(\\hline\s*)(?!\n)/, '\\hline\\\\\\\\')
-  lines = lines.split(/\\\\/)
-  data = lines.map do |line|
-    line.split(/[^\\]&/).map { |i| i.strip }
+  table_content.gsub!(/(\\hline\s*)(?!\n)/, '\\hline\\\\\\\\')
+  lines = table_content.split(/\\\\/)
+
+  # Check for manual horizontal spacing in the form [space] e.g.: [1cm]
+  space_markers = lines.map do |line|
+    line.slice!(/\s*\[\.?\d+.*\]/)
   end
-  cols = data.map { |i| i.length }.max
+
+  cells = lines.map do |line|
+    line.split(/[^\\]&|^&/).map { |cell| cell.strip }
+  end
+  max_number_columns = cells.map { |line| line.length }.max
   widths = []
-  cols.times do |i|
-    widths << data.reduce(0) do |maximum, line|
-      (line.length <= i) ? maximum : [maximum, line[i].length].max
+  max_number_columns.times do |column|
+    widths << cells.reduce(0) do |maximum, line|
+      (column >= line.length) ? maximum : [maximum, line[column].length].max
     end
   end
-  pattern = widths.map { |i| "%#{i}s" }.join(' & ')
-  output = s ? s.chomp : ''
-  prev = false
-  data.each do |line|
-    output += prev ? "\\\\\n" : "\n"
+  pattern = widths.map { |width| "%#{width}s" }.join(' & ')
+  output = before_table ? before_table.chomp : ''
+  previous_line_contained_cells = false
+  cells.each_with_index do |line, index|
+    output +=
+      previous_line_contained_cells ? "\\\\#{space_markers[index]}\n" : "\n"
     if line.length <= 1
       output += line.join ''
-      prev = false
+      previous_line_contained_cells = false
     else
-      line.fill('', (line.length + 1)..cols)
+      line.fill('', (line.length + 1)..max_number_columns)
       output += sprintf(pattern, *line)
-      prev = true
+      previous_line_contained_cells = true
     end
   end
   output + "\n"
