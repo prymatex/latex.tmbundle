@@ -1,7 +1,7 @@
 # ------------------------------------------------------------------------------
-# Date:    2015-01-07
+# Date:    2015-01-20
 # Author:  René Schwaiger (sanssecours@f-m.fm)
-# Version: 12
+# Version: 18
 #
 #                   Run various tests for this bundle
 #
@@ -11,16 +11,17 @@
 #   2. Run the command “Build” (⌘B) located inside the Make bundle
 #
 # The tests require the following test frameworks:
-#
-# - [nose](http://nose.readthedocs.org)
+# - [tox](https://tox.readthedocs.org)
 # - [cram](https://bitheap.org/cram/)
+# - [nose](http://nose.readthedocs.org)
 # - [rubydoctest](https://github.com/tablatom/rubydoctest)
 #
 # For all tests to work correctly you also need to install “Skim” inside
 # the folder `/Applications`.
 # ------------------------------------------------------------------------------
 
-.PHONY: all clean checkstyle latex_watch cramtests nosetests rubydoctests
+.PHONY: all clean checkstyle latex_watch cramtests nosetests rubydoctests \
+		toxtests
 
 # -- Variables -----------------------------------------------------------------
 
@@ -32,13 +33,13 @@
 export TM_BUNDLE_SUPPORT = $(CURDIR)/Support
 
 BINARY_DIRECTORY = Support/bin
-PYTHON_FILES = itemize.py texmate.py texparser.py tmprefs.py
+LIBRARY_DIRECTORY = Support/lib
 
 # -- Rules ---------------------------------------------------------------------
 
 run: all
 
-all: nosetests rubydoctests cramtests
+all: toxtests cramtests_non_python rubydoctests
 
 clean:
 	cd Tests/TeX && rm -vf *.acr *.alg *.bbl *.blg *.dvi *.fdb_latexmk *.fls \
@@ -51,7 +52,7 @@ clean:
 checkstyle: checkstyle_python
 
 checkstyle_python:
-	cd $(BINARY_DIRECTORY) && flake8 $(PYTHON_FILES)
+	flake8 $(BINARY_DIRECTORY)/*.py $(LIBRARY_DIRECTORY)/*.py
 
 # ================
 # = Manual Tests =
@@ -69,12 +70,14 @@ latex_watch:
 cramtests: clean
 	cd Tests/Cram && cram *.t
 
+cramtests_non_python:
+	cd Tests/Cram && cram check_filenames.t
+
 nosetests: checkstyle_python
-	nosetests --with-doctest 	 \
-		$(BINARY_DIRECTORY)/itemize.py   \
-		$(BINARY_DIRECTORY)/texmate.py   \
-		$(BINARY_DIRECTORY)/texparser.py \
-		$(BINARY_DIRECTORY)/tmprefs.py
+	nosetests --with-doctest $(LIBRARY_DIRECTORY)/*.py $(BINARY_DIRECTORY)/*.py
 
 rubydoctests:
-	rubydoctest Support/bin/format_table.rb
+	rubydoctest Support/lib/format_table.rb
+
+toxtests: checkstyle_python
+	tox

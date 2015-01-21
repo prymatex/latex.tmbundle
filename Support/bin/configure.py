@@ -2,8 +2,12 @@
 
 # -- Imports ------------------------------------------------------------------
 
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from subprocess import Popen, PIPE, STDOUT
-from tmprefs import Preferences
+
+from lib.tmprefs import Preferences
 
 # -- Main ---------------------------------------------------------------------
 
