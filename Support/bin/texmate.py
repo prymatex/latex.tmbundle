@@ -43,7 +43,8 @@ from argparse import ArgumentParser, ArgumentTypeError
 from glob import glob
 from io import open
 from os import chdir, getcwd, getenv, putenv, remove, EX_OSFILE  # noqa
-from os.path import dirname, exists, getmtime, isfile, normpath, realpath
+from os.path import (dirname, exists, getmtime, isfile, normpath, realpath,
+                     splitext)
 from pickle import load, dump
 from pipes import quote as shellquote
 from re import match, search
@@ -683,8 +684,7 @@ def get_filename_without_extension(filename):
         Makefile
 
     """
-    suffix_index = filename.rfind(".")
-    return filename[:suffix_index] if suffix_index > 0 else filename
+    return splitext(filename)[0]
 
 
 def write_latexmkrc(engine, options, location='/tmp/latexmkrc'):
@@ -715,7 +715,7 @@ def write_latexmkrc(engine, options, location='/tmp/latexmkrc'):
         ...
 
     """
-    with open("/tmp/latexmkrc", 'w') as latexmkrc:
+    with open("/tmp/latexmkrc", 'w', encoding='utf-8') as latexmkrc:
         latexmkrc.write(dedent("""\
         $latex = 'latex -interaction=nonstopmode -file-line-error-style {0}';
         $pdflatex = '{1} -interaction=nonstopmode -file-line-error-style {0}';

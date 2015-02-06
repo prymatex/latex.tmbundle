@@ -9,9 +9,10 @@ from __future__ import unicode_literals
 from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
-from argparse import ArgumentParser, FileType
+from argparse import ArgumentParser
+from io import open
 from os import getenv
-from os.path import basename, dirname
+from os.path import basename, dirname, join
 from pickle import load, dump
 from pipes import quote as shellquote
 from subprocess import check_output, STDOUT
@@ -107,9 +108,8 @@ if __name__ == '__main__':
                 other reasons, then `reload` will just fail silently.""")
 
     parser.add_argument(
-        'logfile', type=FileType('r'),
-        help="""The location of the log file that should be parsed. Use -
-                to read from STDIN.""")
+        'logfile',
+        help="""The location of the log file that should be parsed.""")
     parser.add_argument(
         'file',
         help="""The location of the (master) tex file without its extension.
@@ -120,8 +120,8 @@ if __name__ == '__main__':
     logfile = arguments.logfile
     notification_token = arguments.notify
     texfile = '{}.tex'.format(arguments.file)
-    cachefile = '{}/.{}.lb'.format(dirname(arguments.file),
-                                   basename(arguments.file))
+    cachefile = join(dirname(arguments.file),
+                     '.{}.lb'.format(basename(arguments.file)))
 
     if notification_token == 'reload':
         try:
@@ -134,7 +134,8 @@ if __name__ == '__main__':
             # Fail silently
             exit(0)
     else:
-        texparser = LaTexMkParser(logfile, verbose=False, filename=texfile)
+        texparser = LaTexMkParser(open(logfile, encoding='utf-8'),
+                                  verbose=False, filename=texfile)
         texparser.parse_stream()
         # Sort marks by line number
         marks = sorted(texparser.marks, key=lambda marks: marks[1])

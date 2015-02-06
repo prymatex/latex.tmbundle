@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+
 ##
 # Format a latex tabular environment.
 #
@@ -16,7 +18,7 @@
 # doctest: Reformat a table containing only one line
 #
 #   >> reformat 'First Item & Second Item'
-#   => "\nFirst Item & Second Item\n"
+#   => "\nFirst Item & Second Item"
 #
 # doctest: Reformat a table containing an escaped `&` sign
 #
@@ -24,8 +26,7 @@
 #   >> expected =
 #    '
 #    First Item & Second Item\\\\
-#      He \& Ho &          Hi
-#    '
+#      He \& Ho &          Hi'
 #   >> output.eql? expected
 #   => true
 #
@@ -37,8 +38,7 @@
 #               & 2\\\\
 #    \\hline
 #               & 4\\\\
-#    Turbostaat & 6
-#    '
+#    Turbostaat & 6'
 #   >> output.eql? expected
 #   => true
 #
@@ -49,8 +49,7 @@
 #    '
 #         1 &    2\\\\[1cm]
 #    \\hline
-#     Three & Four
-#    '
+#     Three & Four'
 #   >> output.eql? expected
 #   => true
 #
@@ -88,5 +87,5 @@ def reformat(table_content)
       previous_line_contained_cells = true
     end
   end
-  output + "\n"
+  output
 end
