@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
 # -----------------------------------------------------------------------------
-# Date:    2015-01-18
 # Authors: Brad Miller
 #          René Schwaiger (sanssecours@f-m.fm)
-# Version: 1
 # -----------------------------------------------------------------------------
 
 """This module contains code to parse tex (log) files."""
@@ -26,11 +24,6 @@ except ImportError:
 # -- Module Import ------------------------------------------------------------
 
 PYTHON2 = version_info <= (3, 0)
-
-if PYTHON2:
-    import sys
-    reload(sys)
-    sys.setdefaultencoding("utf-8")
 
 
 # -- Functions ----------------------------------------------------------------
@@ -127,9 +120,12 @@ class TexParser(object):
             ...
 
         """
+        def to_utf8(string):
+            return string.decode('latin_1') if PYTHON2 else string
+
         statement = ""
         while True:
-            line = self.input_stream.readline()
+            line = to_utf8(self.input_stream.readline())
             if not line:
                 return statement
             statement += line.rstrip('\n')
@@ -511,7 +507,7 @@ class LaTexParser(TexParser):
             (compile('LaTeX Font Warning:.*'), self.warning),
             (compile('Overfull.*wide'), self.warning_format),
             (compile('Underfull.*badness'), self.warning_format),
-            (compile('^([\.\/\w\x7f-\xff\-\u0308]+' +
+            (compile('^([\.\/\w\x7f-\xff\-\u0308\ ]+' +
                      '(?:\.sty|\.tex|\.{}))'.format(self.suffix) +
                      ':(\d+):\s+(.*)', UNICODE),
              self.handle_error),
