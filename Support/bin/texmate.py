@@ -157,6 +157,10 @@ def run_biber(filename, verbose=False):
     Examples:
 
         >>> chdir('Tests/TeX')
+        >>> # Generate files for biber
+        >>> call('pdflatex external_bibliography_biber.tex > /dev/null',
+        ... shell=True)
+        0
         >>> run_biber('external_bibliography_biber') # doctest:+ELLIPSIS
         <...
         ...
@@ -631,14 +635,14 @@ def construct_engine_command(ts_directives, tm_engine, packages):
         >>> print(construct_engine_command({'TS-program': 'pdflatex'},
         ...                                'latex', set()))
         pdflatex
-        >>> print(construct_engine_command({}, 'latex', {'fontspec'}))
+        >>> print(construct_engine_command({}, 'latex', {'xunicode'}))
         xelatex
         >>> print(construct_engine_command({}, 'latex', set()))
         latex
 
     """
     latex_indicators = {'pstricks', 'xyling', 'pst-asr', 'OTtablx', 'epsfig'}
-    xelatex_indicators = {'xunicode', 'fontspec'}
+    xelatex_indicators = {'xunicode'}
     lualatex_indicators = {'luacode'}
 
     if 'TS-program' in ts_directives:
