@@ -11,22 +11,18 @@ require ENV['TM_BUNDLE_SUPPORT'] + '/lib/command.rb'
 
 # -- Main ----------------------------------------------------------------------
 
-include_image</string>
+include_file</string>
 	<key>draggedFileExtensions</key>
 	<array>
-		<string>jpg</string>
-		<string>jpeg</string>
-		<string>pdf</string>
-		<string>eps</string>
-		<string>png</string>
+		<string>tex</string>
 	</array>
 	<key>name</key>
-	<string>Include Image</string>
+	<string>Include File</string>
 	<key>output</key>
 	<string>insertAsSnippet</string>
 	<key>scope</key>
 	<string>text.tex.latex</string>
 	<key>uuid</key>
-	<string>2C5B80BC-C9C8-11D9-B88C-000A95C0F626</string>
+	<string>5C321350-C9CD-11D9-B88C-000A95C0F626</string>
 </dict>
 </plist>
