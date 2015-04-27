@@ -1044,19 +1044,23 @@ if __name__ == '__main__':
     elif command == 'clean':
         auxiliary_file_regex = (
             '.*\.(acn|acr|alg|aux|bbl|bcf|blg|fdb_latexmk|fls|fmt|glg|glo|gls|'
-            'idx|ilg|ind|ini|ist|lb|log|out|maf|mtc|mtc1|nav|pdfsync|run.xml|'
-            'snm|synctex.gz|toc)$')
+            'idx|ilg|ind|ini|ist|lb|log|out|maf|mtc|mtc1|nav|nlo|nls|pdfsync|'
+            'pytxcode|run.xml|snm|synctex.gz|toc)$')
         command = ("find -E . -maxdepth 1 -type f -regex " +
                    "'{}' -delete -print".format(auxiliary_file_regex))
         removed_files = check_output(command, shell=True,
-                                     universal_newlines=True).strip()
+                                     universal_newlines=True)
+        command = ("find . -maxdepth 1 -type d -name 'pythontex-files-*' " +
+                   "-print -exec rm -r '{}' \;")
+        removed_files += check_output(command, shell=True,
+                                      universal_newlines=True).rstrip()
         # Remove leading './' to get nicer looking output
         removed_files = removed_files.replace('./', '')
         if removed_files:
             for removed_file in removed_files.split('\n'):
                 print('<p class"info">Removed {}</p>'.format(removed_file))
         else:
-            print('<p class"info">Clean: No Auxiliary files found'.format())
+            print('<p class"info">Clean: No Auxiliary files found')
 
     elif command == 'latex':
         engine_options = construct_engine_options(typesetting_directives,

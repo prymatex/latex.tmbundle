@@ -247,6 +247,11 @@ module LaTeX
     #  >> filepath = LaTeX.find_file('config/pdftexconfig', 'tex', '')
     #  >> filepath.end_with?('config/pdftexconfig.tex')
     #  => true
+    #
+    #  doctest: Try to get the location of a non-existent file
+    #
+    #  >> LaTeX.find_file('la', 'tex', '')
+    #  => nil
     def find_file(filename, extension, relative)
       filename.gsub!(/"/, '')
       filename.gsub!(/\.#{extension}$/, '')
@@ -257,7 +262,7 @@ module LaTeX
       end
       # If it is an absolute path, and the above two tests didn't find it,
       # return nil
-      return nil if filename.match(/^\//)
+      return nil if filename.match(%r{^/})
       find_file_kpsewhich(filename, extension, relative)
     end
 
@@ -632,12 +637,13 @@ module LaTeX
       @@paths ||= {}
       @@paths[extension] ||= (
         `#{LaTeX.tex_path}kpsewhich -show-path=#{extension}`.chomp.split(
-          /:!!|:/).map { |dir| dir.sub(/\/*$/, '/') }
-          ).unshift(relative).unshift('')
+          /:!!|:/).map { |dir| dir.sub(%r{/*$}, '/') }).unshift(
+            relative).unshift('')
       @@paths[extension].each do |path|
         fp = File.expand_path(File.join(path, filename))
         [fp, "#{fp}.#{extension}"].each { |file| return file if file?(file) }
       end
+      nil
     end
   end
 
@@ -704,10 +710,10 @@ module LaTeX
       fail 'No root specified!' if @root.nil?
       fail "Could not find file #{@root}" unless File.exist?(@root)
       text = File.read(@root)
-      text.split.each_with_index do |line, line_number|
+      text.lines.each_with_index do |line, line_number|
         includes.each_pair do |regex, block|
-          inlcude_process_line(line, regex, block)
-          extractors_process_line(line, line_number, extractors, text)
+          include_process_line(line, regex, block)
+          extractors_process_line(root, line, line_number, extractors, text)
         end
       end
     end
@@ -764,7 +770,7 @@ module LaTeX
     #  doctest: Scan the file +packages.tex+ for citations
     #
     #  >> include LaTeX
-    #  >> FileScanner.label_scan('Tests/TeX/packages.tex')
+    #  >> FileScanner.cite_scan('Tests/TeX/packages.tex')
     #  => []
     #
     #  doctest: Scan the file +references.tex+ for citations
@@ -811,7 +817,7 @@ module LaTeX
       scanner.extractors.update(Hash[regexes.map { |reg| [reg, extractor] }])
     end
 
-    def inlcude_process_line(line, regex, block)
+    def include_process_line(line, regex, block)
       line.scan(regex).each do |match|
         newfiles = block.call(match)
         newfiles.each do |newfile|
@@ -822,7 +828,7 @@ module LaTeX
       end
     end
 
-    def extractors_process_line(line, line_number, extractors, text)
+    def extractors_process_line(root, line, line_number, extractors, text)
       extractors.each_pair do |extractor_regex, extractor_block|
         line.scan(extractor_regex).each do |match|
           extractor_block.call(root, line_number, match, text)

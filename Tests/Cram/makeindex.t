@@ -15,12 +15,13 @@ Generate the index for the file
 
 Translate the LaTeX file
 
-  $ texmate.py -s latex -e pdflatex -l no | grep 'Output written' | countlines
+  $ texmate.py -s latex -e pdflatex -l no 2>&- | grep 'Output written' | \
+  > countlines
   1
 
 -- Cleanup --------------------------------------------------------------------
 
 Remove the generated files
 
-  $ rm -f *.ilg *.ind *.log *.pdf
+  $ rm -f *.dvi *.ilg *.ind *.log *.pdf *.ps
 
