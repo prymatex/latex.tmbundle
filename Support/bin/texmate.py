@@ -1050,14 +1050,16 @@ if __name__ == '__main__':
                    "'{}' -delete -print".format(auxiliary_file_regex))
         removed_files = check_output(command, shell=True,
                                      universal_newlines=True)
-        command = ("find . -maxdepth 1 -type d -name 'pythontex-files-*' " +
+        command = ("find -E . -maxdepth 1 -type d -regex " +
+                   "'./(pythontex-files-|_minted-).+' " +
                    "-print -exec rm -r '{}' \;")
         removed_files += check_output(command, shell=True,
-                                      universal_newlines=True).rstrip()
+                                      universal_newlines=True)
         # Remove leading './' to get nicer looking output
-        removed_files = removed_files.replace('./', '')
-        if removed_files:
-            for removed_file in removed_files.split('\n'):
+        removed_files = removed_files.rstrip().replace('./', '').splitlines()
+        # Ignore cache file created by this script
+        if len(removed_files) > 1:
+            for removed_file in removed_files:
                 print('<p class"info">Removed {}</p>'.format(removed_file))
         else:
             print('<p class"info">Clean: No Auxiliary files found')
