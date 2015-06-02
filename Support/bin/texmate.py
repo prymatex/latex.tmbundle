@@ -37,7 +37,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from os import sys, path
-sys.path.insert(1, path.dirname(path.dirname(path.abspath(__file__))))  # noqa
+sys.path.insert(1, path.dirname(path.dirname(path.abspath(__file__))) +
+                "/lib/Python")  # noqa
 
 from argparse import ArgumentParser, ArgumentTypeError
 from glob import glob
@@ -56,13 +57,11 @@ try:
 except ImportError:
     from urllib import quote  # Python 2
 
-from lib.tex import (find_file_to_typeset, find_tex_directives,
-                     find_tex_packages)
-from lib.tmprefs import Preferences
-from lib.util import update_marks
-from lib.parsing import (BibTexParser, BiberParser, ChkTexParser,
-                         LaTexParser, MakeGlossariesParser, MakeIndexParser,
-                         LaTexMkParser)
+from tex import (find_file_to_typeset, find_tex_directives, find_tex_packages)
+from tmprefs import Preferences
+from util import update_marks
+from parsing import (BibTexParser, BiberParser, ChkTexParser, LaTexParser,
+                     MakeGlossariesParser, MakeIndexParser, LaTexMkParser)
 
 
 # -- Module Import ------------------------------------------------------------
@@ -621,8 +620,9 @@ def construct_engine_command(ts_directives, tm_engine, packages):
         tm_engine
 
             A sting containing the default tex engine used in TextMate. The
-            default engine will be used if ``TS-program`` is not set and none
-            of the specified packages contain engine-specific code.
+            default engine will be used if ``TS-program`` or ``program`` is
+            not set and none of the specified packages contain engine-specific
+            code.
 
         packages
 
@@ -647,6 +647,8 @@ def construct_engine_command(ts_directives, tm_engine, packages):
 
     if 'TS-program' in ts_directives:
         engine = ts_directives['TS-program']
+    elif 'program' in ts_directives:
+        engine = ts_directives['program']
     elif packages.intersection(latex_indicators):
         engine = 'latex'
     elif packages.intersection(xelatex_indicators):
@@ -727,7 +729,8 @@ def write_latexmkrc(engine, options, location='/tmp/latexmkrc'):
 
 
 def get_typesetting_data(filepath, tm_engine,
-                         tm_bundle_support=getenv('TM_BUNDLE_SUPPORT')):
+                         tm_bundle_support=getenv('TM_BUNDLE_SUPPORT'),
+                         ignore_root_loops=False):
     """Return a dictionary containing up-to-date typesetting data.
 
     This function changes the current directory to the location of
@@ -746,6 +749,11 @@ def get_typesetting_data(filepath, tm_engine,
         tm_bundle_support
 
             The location of the “LaTeX Bundle” support folder.
+
+        ignore_root_loops
+
+            Specifies if this function exits with an error status if the tex
+            root directives contain a loop.
 
     Returns: ``{str: str}``
 
@@ -802,7 +810,7 @@ def get_typesetting_data(filepath, tm_engine,
         return typesetting_data
 
     filepath = normpath(realpath(filepath))
-    typesetting_directives = find_tex_directives(filepath)
+    typesetting_directives = find_tex_directives(filepath, ignore_root_loops)
     filename, file_path = find_file_to_typeset(typesetting_directives,
                                                tex_file=filepath)
     file_without_suffix = get_filename_without_extension(filename)
@@ -961,8 +969,9 @@ if __name__ == '__main__':
         if arguments.engine_options:
             tm_engine_options = arguments.engine_options
 
-    typesetting_data = get_typesetting_data(filepath, tm_engine,
-                                            tm_bundle_support)
+    typesetting_data = get_typesetting_data(
+        filepath, tm_engine, tm_bundle_support,
+        True if command == 'version' else False)
 
     typesetting_directives = typesetting_data['typesetting_directives']
     cache_filename = typesetting_data['cache_filename']
@@ -1139,7 +1148,8 @@ if __name__ == '__main__':
         print('</div></div>')  # Close divs `preText` and `commandOutput`
         pdf_file = '{}.pdf'.format(file_without_suffix)
         # only need to include the javascript library once
-        texlib_location = quote('{}/lib/texlib.js'.format(tm_bundle_support))
+        texlib_location = quote('{}/lib/JavaScript/texlib.js'.format(
+                                tm_bundle_support))
 
         print('''<script src="file://{}" type="text/javascript"
                   charset="utf-8"></script>
@@ -1158,7 +1168,7 @@ if __name__ == '__main__':
         if viewer == 'TextMate':
             print('''<input type="button" value="View in TextMate"
                       onclick="window.location='file://{}'"/>'''.format(
-                  quote('{}/{}'.format(file_path, pdf_file))))
+                  quote('{}/{}'.format(file_path, pdf_file).encode('utf8'))))
         else:
             print('''<input type="button" value="View in {}"
                      onclick="runView(); return false">'''.format(viewer))

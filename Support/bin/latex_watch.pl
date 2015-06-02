@@ -1,8 +1,6 @@
 #! /usr/bin/perl
 
 # LaTeX Watch,
-our $VERSION = "3.11";
-
 #  - by Robin Houston, 2007, 2008.
 #  - by René Schwaiger, 2014, 2015.
 
@@ -21,16 +19,21 @@ our $VERSION = "3.11";
 #       -d --textmate-pid=$tm_pid path/to/texfile.tex
 #
 
-# Changelog now at end of file.
-
 use strict;
 use warnings;
-use POSIX ();
+
+use Cwd qw(abs_path);
 use File::Basename;
 use File::Copy 'copy';
 use File::Path 'remove_tree';
-use File::Spec;
 use Getopt::Long qw(GetOptions :config no_auto_abbrev bundling);
+use POSIX ();
+use Time::HiRes 'sleep';
+
+use lib dirname( dirname abs_path $0) . '/lib/Perl';
+use Latex qw(guess_tex_engine master);
+
+our $VERSION = "3.11";
 
 #############
 # Configure #
@@ -129,41 +132,6 @@ main_loop();
     }
 }
 
-# Guess the TeX engine which should be used to translate a certain TeX-file.
-#
-# Arguments:
-#
-#      filepath - The file path to the TeX file either as absolute path or
-#                 relative to the location of this file
-#
-# Returns:
-#
-#      A string containing the TeX engine for the given file or an empty
-#      string if the engine could not be determined
-#
-# Example:
-#
-#   We assume `test.tex` contains the line `%!TEX TS-program = pdflatex`
-#   $ guess_tex_engine(test.tex)
-#   "pdflatex"
-#
-sub guess_tex_engine {
-    open( my $fh, "<", @_ )
-      or die "cannot open @_: $!";
-
-    my $engine = "";
-    # TS-program is case insensitive e.g. `LaTeX` should be the same as `latex`
-    my $engines = "(?i)latex|lualatex|pdflatex|xelatex(?-i)";
-    while ( my $line = <$fh> ) {
-        if ( $line =~ /%!TEX(?:\s+)(?:TS-)program(?:\s*)=(?:\s*)($engines)/ ) {
-            $engine = lc($1);
-            last;
-        }
-    }
-    close($fh);
-    return $engine;
-}
-
 sub get_prefs {
     my $engine = guess_tex_engine("$absolute_wd/$name.tex");
     debug_msg("Found type setting program: $engine");
@@ -171,7 +139,7 @@ sub get_prefs {
     return (
         engine  => $engine,
         options => getPreference( latexEngineOptions => "" ),
-        viewer  => getPreference( latexViewer        => "TextMate" ),
+        viewer  => getPreference( latexViewer => "TextMate" ),
     );
 }
 
@@ -191,9 +159,7 @@ sub init_environment {
       . "TextMate/Managed/Bundles/Bundle Support.tmbundle/Support/shared"
       if !defined $ENV{TM_SUPPORT_PATH};
     if ( !defined $ENV{TM_BUNDLE_SUPPORT} ) {
-        $ENV{TM_BUNDLE_SUPPORT} =
-          dirname( File::Spec->rel2abs(__FILE__) );
-        $ENV{TM_BUNDLE_SUPPORT} =~ s/\/bin$//;
+        $ENV{TM_BUNDLE_SUPPORT} = dirname( dirname abs_path $0);
     }
 
     # Add TextMate support paths
@@ -230,9 +196,15 @@ sub parse_command_line_options {
 
 sub parse_file_path {
     my $filepath = shift(@ARGV);
+    my $error;
     fail( "File not saved", "You must save the file before it can be watched" )
       if !defined($filepath)
       or $filepath eq "";
+
+    ( $error, $filepath ) = master($filepath) if -r $filepath;
+
+    # filepath contains error message in case of error
+    fail( "Incorrect master file", $filepath ) if $error;
 
     # Parse and verify file path
     my ( $wd, $name, $absolute_wd );
@@ -240,7 +212,7 @@ sub parse_file_path {
         $wd = $1;
         my $fullname = $';
         if ( $fullname =~ /\.tex\z/ ) {
-            $name    = $`;
+            $name = $`;
         }
         else {
             fail(
@@ -280,7 +252,7 @@ sub main_loop {
     while (1) {
         if ( document_has_changed() ) {
             debug_msg("Reloading file");
-            my ($output_exists, $error) = compile();
+            my ( $output_exists, $error ) = compile();
             view() if $output_exists;
             parse_log($error);
             if ( defined($progressbar_pid) ) {
@@ -307,7 +279,7 @@ sub main_loop {
               };
         }
 
-        select( undef, undef, undef, 0.5 );    # Sleep for 0.5 seconds
+        sleep(0.5);
     }
 }
 
@@ -328,8 +300,9 @@ sub clean_up {
 
         # Remove LaTeX bundle cache file
         unlink("$wd/.$name.lb");
-        remove_tree("$wd/pythontex-files-" . $name =~ s/ /-/gr);
-        remove_tree("$wd/_minted-" . $name =~ s/ /-/gr);
+        ( my $cache_name = $name ) =~ s/ /-/g;
+        remove_tree( "$wd/pythontex-files-" . $cache_name );
+        remove_tree( "$wd/_minted-" . $cache_name );
     }
     $cleanup_viewer->() if defined $cleanup_viewer;
     if ( defined($progressbar_pid) ) {
@@ -458,6 +431,7 @@ sub compile {
         "@tex '$wd/$name.tex' &> '$name.latexmk.log'",
         sub {
             if ( $? == 1 || $? == 2 || $? == 12 ) {
+
                 # An error in the document
                 debug_msg("Typesetting command failed with error code $?\n");
                 $error = 1;
@@ -475,20 +449,20 @@ sub compile {
         if ( -e "$wd/$name.ps" ) {
             $compiled_document      = "$wd/$name.ps";
             $compiled_document_name = "$name.ps";
-            return (1, $error);    # Success!
+            return ( 1, $error );    # Success!
         }
         else {
-            return (0, $error);    # Failure
+            return ( 0, $error );    # Failure
         }
     }
-    else {               # PDF mode
+    else {                           # PDF mode
         if ( -e "$wd/$name.pdf" ) {
             $compiled_document      = "$wd/$name.pdf";
             $compiled_document_name = "$name.pdf";
-            return (1, $error);    # Success!
+            return ( 1, $error );    # Success!
         }
         else {
-            return (0, $error);    # Failure
+            return ( 0, $error );    # Failure
         }
     }
 }
@@ -594,11 +568,13 @@ sub select_postscript_viewer {
             fail("Failed to execute gv ($?): $!");
         }
         elsif ($?) {
+
             # Assume that gv did not understand the --version option,
             # and that it is therefore a pre-3.6.0 version
             @ps_viewer = qw(gv -spartan -scale 1 -nocenter -antialias -nowatch);
         }
         elsif ( $gv_version =~ /^gv 3.6.0$/ ) {
+
             # This version is hopelessly broken. Give up.
             fail(
                 "Broken GV detected",
@@ -609,6 +585,7 @@ sub select_postscript_viewer {
             );
         }
         elsif ( $gv_version =~ /^gv 3.6.1$/ ) {
+
             # Version 3.6.1 of GV has a bug that means it
             # dies if it receives a HUP signal. Therefore we execute it
             # in watch mode, and don't send a HUP.
@@ -619,6 +596,7 @@ sub select_postscript_viewer {
             $hup_viewer = 0;
         }
         elsif ( $gv_version =~ /^gv 3.6.2$/ ) {
+
             # The --scale bug has still not been fixed in 3.6.2,
             # but the HUP one has.
             @ps_viewer = qw(gv --spartan --nocenter --antialias --nowatch);
@@ -641,6 +619,7 @@ sub select_postscript_viewer {
 sub start_postscript_viewer {
     my $pid = fork();
     if ($pid) {
+
         # In parent
         return $pid;
     }
@@ -701,7 +680,7 @@ my $pdf_viewer_app;
 
 sub select_pdf_viewer {
     my ($viewer) = @_;
-    $viewer ||= "TeXShop";    # TeXShop is the default
+    $viewer ||= "Skim";    # We use Skim as default viewer
 
     debug_msg("PDF Viewer selected ($viewer)");
 
@@ -860,11 +839,13 @@ sub fail_unless_system {
 sub cocoa_dialog {
     pipe( my $rh, my $wh );
     if ( my $pid = fork() ) {
+
         # Parent
         local $/ = "\n";
         my $button = <$rh>;
         waitpid( $pid, 0 );
         if ($?) {
+
             # If we failed to show the dialog, there's not much sense
             # in trying to put up another dialog to explain what happened!
             # Print a message to the console.
@@ -891,6 +872,7 @@ sub cocoa_dialog {
 }
 
 sub applescript {
+
     # We could do this much more efficiently using Mac::OSA
     # but that's only preinstalled on 10.4 and later.
     fail_unless_system( "osascript", "-e", @_ );
