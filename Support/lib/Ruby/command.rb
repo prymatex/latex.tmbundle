@@ -320,6 +320,58 @@ rescue RuntimeError => e
   TextMate.exit_show_tool_tip(e.message)
 end
 
+# =========================
+# = Insert LaTeX Template =
+# =========================
+
+# Return the paths of the template directories.
+#
+# = Output
+#
+# This function returns a list containing the path to the template directory.
+def template_directories
+  [ENV['TM_BUNDLE_SUPPORT'] + '/templates',
+   ENV['HOME'] + '/Library/Application Support/LaTeX/Templates/']
+end
+
+# Return the name and content of the files in the template directories.
+#
+# = Output
+#
+# A list of files, each represented by a dictionary containing the filename and
+# the content of the file.
+def template_entries
+  template_directories.map do |directory|
+    Dir.glob("#{directory}/*.tex").map do |file|
+      { 'filename' => File.basename(file), 'content' => File.read(file) }
+    end
+  end.flatten
+end
+
+# Return the template text of the selected template.
+#
+# = Output
+#
+# A string containing the content of the chosen template.
+def template_text
+  command = ("\"#{ENV['DIALOG']}\" -cmp " \
+             "#{e_sh({ 'entries' => template_entries }.to_plist)} " \
+             "#{e_sh(ENV['TM_BUNDLE_SUPPORT'] + '/nibs/templates.nib')}")
+  result = OSX::PropertyList.load(`#{command}`)['result']
+  TextMate.exit_discard if result.nil?
+  result['returnArgument'][0].scan(/\n|.+\n?/)
+end
+
+# Insert a template at the current position of the caret.
+def insert_template
+  text = template_text
+  # The user can force the template to be interpreted as a snippet, by
+  # adding the line: %!TEX style=snippet at the beginning of the template
+  TextMate.exit_insert_snippet(text[1..-1]) if
+    text[0].match(/^%\s*!TEX\s+style\s*=\s*snippet\s*/)
+  print(text.join(''))
+end
+
 # ======================
 # = Open Included Item =
 # ======================
@@ -392,15 +444,13 @@ end
 # Open the current master file in TextMate
 def open_master_file
   master = masterfile
-  if master
-    if master == ENV['TM_FILEPATH']
-      print('Already in master file')
-    else
-      `open -a TextMate #{e_sh master}`
-    end
+  if master == ENV['TM_FILEPATH']
+    print('Already in master file')
   else
-    print('No master file was defined.')
+    `open -a TextMate #{e_sh master}`
   end
+rescue RuntimeError => e
+  TextMate.exit_show_tool_tip(e.message)
 end
 
 # ==========================
