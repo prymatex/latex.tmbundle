@@ -35,11 +35,11 @@
 # bundle. This will lead to errors since `latex_watch` expects that
 # `TM_BUNDLE_SUPPORT` is set “correctly”.
 export TM_BUNDLE_SUPPORT = $(CURDIR)/Support
+export PATH := /Library/TeX/texbin:$(PATH)
 
 BINARY_DIRECTORY = Support/bin
 LIBRARY_DIRECTORY = Support/lib
-RUBY_FILES = Support/lib/Ruby/command.rb Support/lib/Ruby/format_table.rb \
-			 Support/lib/Ruby/latex.rb
+RUBY_FILES = Support/lib/Ruby/*.rb Support/lib/Ruby/*/*.rb
 
 # -- Rules ---------------------------------------------------------------------
 
@@ -59,6 +59,7 @@ checkstyle: checkstyle_perl checkstyle_python checkstyle_ruby
 
 checkstyle_perl:
 	perlcritic --harsh $(LIBRARY_DIRECTORY)/Perl/*.pm Tests/Perl/*.t
+	perlcritic $(BINARY_DIRECTORY)/latex_watch.pl
 
 checkstyle_python:
 	flake8 $(BINARY_DIRECTORY)/*.py $(LIBRARY_DIRECTORY)/Python/*.py

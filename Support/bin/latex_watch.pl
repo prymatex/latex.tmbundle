@@ -23,17 +23,19 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Env
+  qw(DIALOG DISPLAY HOME PATH TM_APP_IDENTIFIER TM_BUNDLE_SUPPORT TM_SUPPORT_PATH);
 use File::Basename;
 use File::Copy 'copy';
-use File::Path 'remove_tree';
 use Getopt::Long qw(GetOptions :config no_auto_abbrev bundling);
 use POSIX ();
 use Time::HiRes 'sleep';
 
 use lib dirname( dirname abs_path $0) . '/lib/Perl';
+use Auxiliary qw(remove_auxiliary_files);
 use Latex qw(guess_tex_engine master);
 
-our $VERSION = "3.11";
+our $VERSION = "3.14";
 
 #############
 # Configure #
@@ -46,21 +48,21 @@ my ( $DEBUG, $textmate_pid, $progressbar_pid ) = parse_command_line_options();
 my ( $filepath, $wd, $name, $absolute_wd ) = parse_file_path();
 
 my %prefs = get_prefs();
-my ( $mode, $viewer_option, $viewer, @tex );
+my ( $mode, $viewer, @tex );
 
 @tex = qw(latexmk -interaction=nonstopmode);
-push( @tex, "-r '$ENV{TM_BUNDLE_SUPPORT}/config/latexmkrc'" );
+push( @tex, "-r '$TM_BUNDLE_SUPPORT/config/latexmkrc'" );
 if ( $prefs{engine} eq 'latex' ) {
     $mode = "PS";
 
     # Set $DISPLAY to a sensible default, if it's unset
-    $ENV{DISPLAY} = ":0"
-      if !defined $ENV{DISPLAY};
+    $DISPLAY = ":0"
+      unless defined $DISPLAY;
 
     applescript('tell application "XQuartz" to launch');
 
     # Add Fink path
-    $ENV{PATH} .= ":/sw/bin";
+    $PATH .= ":/sw/bin";
 
     push( @tex, qw(-ps) );
 
@@ -107,16 +109,15 @@ main_loop();
             );
         }
 
-        if ( $ENV{TM_APP_IDENTIFIER} ) {
-            $prefs_file =
-              "$ENV{HOME}/Library/Preferences/$ENV{TM_APP_IDENTIFIER}.plist";
+        if ($TM_APP_IDENTIFIER) {
+            $prefs_file = "$HOME/Library/Preferences/$TM_APP_IDENTIFIER.plist";
         }
         else {
             # Guess the location of the current preference file outside of
             # TextMate. The following path is the usual location for the
             # preview version of TextMate (2.0-alpha).
             $prefs_file =
-                "$ENV{HOME}/Library/Preferences/"
+                "$HOME/Library/Preferences/"
               . "com.macromates.textmate.preview.plist";
         }
 
@@ -150,32 +151,26 @@ sub get_prefs {
 sub init_environment {
 
     # Add MacTeX
-    $ENV{PATH} .= ":/usr/texbin";
+    $PATH .= ":/usr/texbin";
 
     # If TM_SUPPORT_PATH or TM_BUNDLE_SUPPORT are undefined, make a plausible
     # guess. (Useful for running this script from outside TextMate.)
-    $ENV{TM_SUPPORT_PATH} =
-        "$ENV{HOME}/Library/Application Support/"
+    $TM_SUPPORT_PATH =
+        "$HOME/Library/Application Support/"
       . "TextMate/Managed/Bundles/Bundle Support.tmbundle/Support/shared"
-      if !defined $ENV{TM_SUPPORT_PATH};
-    if ( !defined $ENV{TM_BUNDLE_SUPPORT} ) {
-        $ENV{TM_BUNDLE_SUPPORT} = dirname( dirname abs_path $0);
+      if !defined $TM_SUPPORT_PATH;
+    if ( !defined $TM_BUNDLE_SUPPORT ) {
+        $TM_BUNDLE_SUPPORT = dirname( dirname abs_path $0);
     }
 
     # Add TextMate support paths
-    $ENV{PATH} .= ":$ENV{TM_SUPPORT_PATH}/bin";
-    $ENV{PATH} .= ":$ENV{TM_BUNDLE_SUPPORT}/bin";
+    $PATH .= ":$TM_SUPPORT_PATH/bin";
+    $PATH .= ":$TM_BUNDLE_SUPPORT/bin";
 
     # Location of CocoaDialog binary
-    init_CocoaDialog( "$ENV{TM_SUPPORT_PATH}/bin/CocoaDialog.app"
+    init_CocoaDialog( "$TM_SUPPORT_PATH/bin/CocoaDialog.app"
           . "/Contents/MacOS/CocoaDialog" );
 
-    # Include the bundle's tex tree in the search path: we have a local copy
-    # of pdfsync.sty.
-    $ENV{TEXINPUTS} = `kpsewhich -progname latex --expand-var '\$TEXINPUTS'`;
-    chomp $ENV{TEXINPUTS};
-
-    $ENV{TEXINPUTS} .= ":$ENV{TM_BUNDLE_SUPPORT}/tex/";
 }
 
 sub parse_command_line_options {
@@ -290,20 +285,7 @@ sub main_loop {
 # Clean up if we're interrupted or die
 sub clean_up {
     debug_msg("Cleaning up");
-    if ( defined($wd) ) {
-        unlink(
-            map( "$wd/$name.$_",
-                qw(acn acr alg aux bbl bcf blg fdb_latexmk fls fmt glo glg gls
-                  idx ilg ind ini ist latexmk.log log maf mtc mtc1 nav nlo nls
-                  pytxcode out pdfsync run.xml snm synctex.gz toc) )
-        );
-
-        # Remove LaTeX bundle cache file
-        unlink("$wd/.$name.lb");
-        ( my $cache_name = $name ) =~ s/ /-/g;
-        remove_tree( "$wd/pythontex-files-" . $cache_name );
-        remove_tree( "$wd/_minted-" . $cache_name );
-    }
+    remove_auxiliary_files( $name, $wd );
     $cleanup_viewer->() if defined $cleanup_viewer;
     if ( defined($progressbar_pid) ) {
         debug_msg("Closing progress bar window as part of cleanup");
@@ -380,13 +362,15 @@ sub parse_file_list {
     local $/ = "\n";
 
     my %updated_files;
-    while (<$f>) {
+    # Skip font files, .aux, .ini files and files produced by the minted package
+    my $ignored_files_pattern =
+      '/dev/null|\.(?:fd|tfm|aux|ini|aex|mintedcmd|mintedmd5|pyg|w18)$';
+
+      while (<$f>) {
         if (/^(INPUT|OUTPUT) (.*)/) {
             my ( $t, $f ) = ( $1, $2 );
 
-            next
-              if $f =~
-              m!\.(?:fd|tfm|aux|ini)$!;   # Skip font files, .aux and .ini files
+            next if $f =~ m!$ignored_files_pattern!;
             $f = "$wd/$f" if $f !~ m(/);
 
             my $mtime = -M ($f);
@@ -500,7 +484,7 @@ sub parse_log {
         # We might have closed the notification window although there still
         # were errors. Lets reopen it if it was closed
 
-        my $open_windows  = `"$ENV{DIALOG}" nib --list`;
+        my $open_windows  = `"$DIALOG" nib --list`;
         my $window_closed = 1;
 
         for ( split /^/, $open_windows ) {
@@ -525,7 +509,7 @@ sub parse_log {
 
 sub close_notification_window {
     if ( $notification_token ne '' ) {
-        fail_unless_system( "$ENV{DIALOG}", "nib", "--dispose",
+        fail_unless_system( "$DIALOG", "nib", "--dispose",
             "$notification_token" );
         $notification_token = '';
     }
@@ -1107,3 +1091,18 @@ Changes
 
 3.11:
     - Remove temporary dir created by package `minted` on cleanup.
+
+3.12:
+    - Do not extend the environment variable TEXINPUTS any more. We used to do
+      this to support “pdfsync”. New TeX distributions include support for the
+      “pdfsync” replacement “SyncTeX”. This means we do not need to support
+      “pdfsync” any more.
+
+3.13:
+    - The script now reads the config file `auxiliary.yaml` to determine which
+      files it removes on cleanup.
+
+3.14:
+    - Improve support for the minted package. Previously the script would
+      sometimes refresh the viewer infinitely often, even if there were no
+      changes to the watched document.

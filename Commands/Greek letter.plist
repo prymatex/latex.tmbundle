@@ -10,9 +10,9 @@
 require "#{ENV['TM_SUPPORT_PATH']}/lib/exit_codes"
 require "#{ENV['TM_SUPPORT_PATH']}/lib/current_word"
 require "#{ENV['TM_SUPPORT_PATH']}/lib/escape"
-require "#{ENV['TM_BUNDLE_SUPPORT']}/lib/Ruby/config_helper.rb"
+require "#{ENV['TM_BUNDLE_SUPPORT']}/lib/Ruby/configuration.rb"
 
-@plist = Config.load
+@plist = Configuration.load
 shortcutHash = @plist['symbols']
 
 match = Word.current_word(/(^\w+)?(.*\n?)/, :hash)

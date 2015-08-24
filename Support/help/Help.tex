@@ -4,12 +4,15 @@
 
 % -- Packages ------------------------------------------------------------------
 
+\usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{fontspec}
 \usepackage[paperheight=25cm, paperwidth=15cm, top=0.5cm, bottom=0.5cm, left=.5cm, right=.5cm]{geometry}
 \usepackage{grffile}
 \usepackage{menukeys}
+\usepackage{microtype}
 \usepackage{minted}
+\usepackage{subfig}
 \usepackage{titlesec}
 \usepackage{hyperref}
 
@@ -18,7 +21,7 @@
 \newcommand{\Authors}{Allan Odgaard, Brad Miller, Ciarán Walsh, Stanley Rost, Haris Skiadas, René Schwaiger}
 \newcommand{\Title}{LaTeX Bundle}
 \newcommand{\TitleDescription}{Documentation}
-\newcommand{\Subject}{Documentation for TextMate's LaTeX Bundle }
+\newcommand{\Subject}{Documentation for TextMate's LaTeX Bundle}
 \newcommand{\KeyWords}{TextMate, Bundle, LaTeX, XeLaTeX, LuaLaTeX, Help}
 
 % -- Document Properties -------------------------------------------------------
@@ -72,7 +75,7 @@
         {\Large\textit\TitleDescription}
     \end{center}
 \end{minipage}
-\vskip 1.5cm
+\vskip 1cm
 
 % Table of contents without header
 \makeatletter
@@ -245,7 +248,7 @@ This section describes the various LaTeX tasks, and how they can be accomplished
 
 Writing LaTeX often requires typing some amount of standard commands and environments. TextMate makes that a lot easier with a set of commands in the LaTeX bundle, that we'll discuss in this section.
 
-\subsubsection{Completing Commands and
+\subsubsection{Inserting Commands and
 Environments}
 
 The LaTeX bundle contains two commands that, if you type a lot of LaTeX, will become your best friends. They are \menu{Insert > Environment Based on Current Word}, bound by default to \keys{\cmd + \textless{}}, and \menu{Insert > Command Based on Current Word}, bound by default to \keys{\cmd + \textgreater{}}. They create an environment/command based on the current word, or a default editable text in the absence of a current word. They are smart enough to understand a number of “standard” shortcuts, also called triggers. For instance, typing \texttt{thm} and then calling the \menu{Insert > Environment Based on Current Word} command creates:
@@ -331,6 +334,37 @@ The first \texttt{\textbackslash{}item} is automatically inserted for you. To ad
 
 There is also a \menu{Lists > Itemize Lines in Selection} command, bound to \keys{\cmd + \shift + L}. It wraps the selected group of lines inside a list environment (\texttt{enumerate}, \texttt{itemize}, or \texttt{description}). Each non-blank line becomes an \texttt{\textbackslash{}item} in the environment. If the first 20 characters of every selected non-empty line contain a \texttt{:}, then the command creates a description environment. All the characters up to the \texttt{:} are placed inside brackets.
 
+\subsubsection{Table Environments}
+
+The command \menu{Table > Create Table} allows you to quickly inserts a table into your document. The command works both with or without a selection.\\
+
+If you do not select any text before you invoke the command, then TextMate displays the pop-up window shown in Figure~\ref{fig:Figures_Table_-_Create_Table}. From there you can choose how many rows and columns the inserted table should have. If you check \menu{Tabular Only} — accessible via \keys{\Alt + \cmd + T} — then the command creates only a \mintinline{tex}|\tabular| environment. Otherwise the command surrounds the \mintinline{tex}|\tabular| environment with a \mintinline{tex}|\table| environment. After you hit \menu{Insert} the command places the table at the current caret position. You can then fill in the various attributes. To switch between them use the keys \keys{\tab} and \keys{\shift + \tab}.
+
+\begin{figure}[H]
+  \centering
+    \includegraphics[width=.5\textwidth]{Figures/Table - Create Table.png}
+  \caption{Graphical User Interface for the command “Create Table”}
+  \label{fig:Figures_Table_-_Create_Table}
+\end{figure}
+
+If you select text before you invoke the command, then use the following format:
+
+\begin{verbatim}
+    [rows] columns [t]
+\end{verbatim}
+
+The format specification above states that you typically write down the number of rows, then the number of columns and then optionally add the character \texttt{t}, if you only want to create a tabular environment. The number of rows is optional. If you do not specify it, then TextMate will create a table with two rows. We provide two examples, which should help you understand the interface. The text above the example shows the selection. After that we show the inserted LaTeX code, followed by the rendering of the translated code.
+
+\paragraph{Selected Text: \menu{2 3}}
+
+\inputminted[frame=lines]{tex}{TeX/Table_2_3.tex}
+\input{TeX/Table_2_3}
+
+\paragraph{Selected Text: \menu{3 4 t}}
+
+\inputminted[frame=lines]{tex}{TeX/Table_3_4_t.tex}
+\input{TeX/Table_3_4_t}
+
 \subsubsection{Wrapping Text}
 
 Often one wants to enclose the currently selected text in an environment, or a command. The LaTeX bundle offers a list of \menu{Wrap\ Selection\ In} commands for all tastes. Here they are:
@@ -366,13 +400,21 @@ Often one wants to enclose the currently selected text in an environment, or a c
 
 \subsection{Completion}
 
-The LaTeX bundle adds the following words to the list of completions (accessed through \keys{\esc}): corollary, definition, description, enumerate, equation, itemize, lemma, proof, proposition and verbatim.\\
+\begin{sloppypar}
+The LaTeX bundle adds the following words to the list of completions (accessed through \keys{\esc}): corollary, definition, description, enumerate, equation, itemize, lemma, proof, proposition and verbatim.
+\end{sloppypar}
+
+\subsubsection{Commands}
+
+We already talked about how you can quickly create a command with \menu{Insert > Command Based on Current Word}. You can also complete a partial typed command with \menu{Insert > Command Completion}. Just write down the first characters of your word, e.g. \mintinline{tex}|\table|, and press \keys{\Alt + \esc}. TextMate will then display a menu with possible completions consisting of predefined commands and commands from your current master file.
+
+\subsubsection{Citations and References}
 
 The LaTeX bundle overrides the standard completion behavior when the caret is inside a \texttt{\textbackslash{}cite\{\}} or \texttt{\textbackslash{}ref\{\}} block. It also overrides the completion behaviour for other equivalent commands like \texttt{eqref}, \texttt{vref}, \texttt{prettyref}, \texttt{citeauthor} etc.\\
 
 If the LaTeX command expects a bibliography key, then pressing \keys{\esc} inside the braces offers completion with respect to all cite keys. This is accomplished by scanning all bib files included in the current master file. For instance, if the caret is right before the closing brace in \texttt{\textbackslash{}cite\{Ka\}}, then pressing \keys{\esc} will cycle trough all bibliography keys starting with \texttt{Ka}.\\
 
-If the LaTeX command expects a label key, pressing \keys{\esc} inside the braces of the command will cycle trough all labels of the current master document. You can narrow the search down by writing part of the label key before you hit \keys{\esc}. This is especially useful if you use a prefix that specifies the type of the reference in your labels. For example, if you prefix each label of a theorem with \texttt{thm:} — i.e.~all theorem labels have the form \texttt{thm:labelname}, then pressing \keys{\esc} when the caret is right before the closing brace in \texttt{\textbackslash{}ref\{thm:\}} will offer as completion options all labels referencing theorems.\\\\
+If the LaTeX command expects a label key, pressing \keys{\esc} inside the braces of the command will cycle trough all labels of the current master document. You can narrow the search down by writing part of the label key before you hit \keys{\esc}. This is especially useful if you use a prefix that specifies the type of the reference in your labels. For example, if you prefix each label of a theorem with \texttt{thm:} — i.e.~all theorem labels have the form \texttt{thm:labelname}, then pressing \keys{\esc} when the caret is right before the closing brace in \texttt{\textbackslash{}ref\{thm:\}} will offer as completion options all labels referencing theorems.\\
 
 If there are many matching completions, it is often more convenient to use the pull-down-list versions of the commands:
 
@@ -424,7 +466,7 @@ In order for all this to work, make sure that the language for the document is s
 
 \subsubsection{Drag and Drop}
 
-There are two key drag and drop commands in LaTeX:
+There are three key drag and drop commands in LaTeX:
 
 \begin{itemize}
 
@@ -432,15 +474,13 @@ There are two key drag and drop commands in LaTeX:
 
     \item You can drag in another \texttt{.tex} file into your document. TextMate will then insert a \texttt{\textbackslash{}include} command that references the dropped file. To use a \texttt{\textbackslash{}input} command instead use the modifier key \keys{\Alt}.
 
+    \item If you drop a source code file into your document, then TextMate creates a new \mintinline{tex}|listing| command referencing the dropped file. Said command is part of the \href{http://ctan.org/pkg/minted}{minted} package. To successfully translate the resulting document include \mintinline{tex}|minted| and install the various package dependencies. Do not forget to specify the option \texttt{-shell-escape} (see section “\nameref{sec:preferences}”), otherwise the translation will fail.\\
+
+    If you want to include dropped code via the command \mintinline{tex}|lstinputlisting|, use the modifier key \keys{\shift}. To translate the resulting document you need the \texttt{listings} package. Make sure that you include it via \mintinline{tex}|\usepackage{listings}|.
+
 \end{itemize}
 
 \subsubsection{Templates}
-
-The LaTeX bundle offers a simple template system. We provides a few sample files. If you want to use your own templates, then create the directory \directory{\textasciitilde{}/Library/Application\ Support/LaTeX/Templates}. In there you can put any \texttt{.tex} files you like. We also support snippet syntax in template files. To tell TextMate that it should insert the code using snippet syntax add the following line at the top of the template:
-
-\begin{minted}{latex}
-    %!TEX style = snippet
-\end{minted}
 
 \begin{figure}[h]
   \centering
@@ -448,6 +488,12 @@ The LaTeX bundle offers a simple template system. We provides a few sample files
   \caption{\menu{Insert > LaTeX Template} lets you insert LaTeX code into your document}
   \label{fig:Figures_Template_Chooser}
 \end{figure}
+
+The LaTeX bundle offers a simple template system. We provides a few sample files. If you want to use your own templates, then create the directory \directory{\textasciitilde{}/Library/Application\ Support/LaTeX/Templates}. In there you can put any \texttt{.tex} files you like. We also support snippet syntax in template files. To tell TextMate that it should insert the code using snippet syntax add the following line at the top of the template:
+
+\begin{minted}{latex}
+    %!TEX style = snippet
+\end{minted}
 
 To insert a template use the command \menu{Insert > LaTeX Template}. The command will show you a window containing a list of all available templates. Select one of these files via the button \menu{Insert}. TextMate will paste the contents of that file at the cursor's location.\\
 
@@ -462,6 +508,7 @@ A typical workflow for the template system looks like this:
 \end{itemize}
 
 \section{Preferences}
+\label{sec:preferences}
 
 \subsection{Global Preferences}
 
@@ -469,7 +516,7 @@ To show the Preferences panel for LaTeX select the command \menu{Preferences…}
 
 \begin{figure}[h]
   \centering
-    \includegraphics[width=.8\textwidth]{Figures/Preferences}
+    \includegraphics[width=.75\textwidth]{Figures/Preferences}
   \caption{The settings window of the LaTeX bundle}
   \label{fig:Figures_Preferences}
 \end{figure}
@@ -511,7 +558,7 @@ If you use TextMate as viewer — instead of an external viewer like Skim, then 
 \subsection{Local Preferences}
 \label{sec:Local_Preferences}
 
-There are three options that you can set on a per file basis. As mentioned above these options will override the preferences that you set using the preferences interface.\\
+There are three options that you can set on a per file basis. As mentioned above these options will override the preferences that you set using the preferences interface.\\[0.2cm]
 
 You can set these “local options” via the \texttt{\%!TEX} directives \texttt{root}, \texttt{TS-program} and \texttt{TS-options}:
 
@@ -523,7 +570,9 @@ You can set these “local options” via the \texttt{\%!TEX} directives \texttt
     \emph\emph{{}}
     \item[\texttt{TS-options}] You can add file specific (engine) options via this directive.
 
-    \textbf{Note:} Whatever options you choose they will be used in the addition to the default options \texttt{-interaction=nonstopmode} and \texttt{-file-line-error-style}.
+    \begin{sloppypar}
+      \textbf{Note:} Whatever options you choose they will be used in the addition to the default options \texttt{-interaction=nonstopmode} and \texttt{-file-line-error-style}.
+    \end{sloppypar}
 
 \end{description}
 

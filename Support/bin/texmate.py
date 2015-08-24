@@ -57,11 +57,12 @@ try:
 except ImportError:
     from urllib import quote  # Python 2
 
-from tex import (find_file_to_typeset, find_tex_directives, find_tex_packages)
-from tmprefs import Preferences
-from util import update_marks
+from auxiliary import remove_auxiliary_files, remove_cache_files
+from gutter import update_marks
 from parsing import (BibTexParser, BiberParser, ChkTexParser, LaTexParser,
                      MakeGlossariesParser, MakeIndexParser, LaTexMkParser)
+from tex import (find_file_to_typeset, find_tex_directives, find_tex_packages)
+from tmprefs import Preferences
 
 
 # -- Module Import ------------------------------------------------------------
@@ -262,7 +263,7 @@ def run_makeindex(filename, verbose=False):
 
     """
     run_object = Popen("makeindex {}".format(shellquote("{}.idx".format(
-        get_filename_without_extension(filename)))), shell=True,
+        splitext(filename)[0]))), shell=True,
         stdout=PIPE, stdin=PIPE, stderr=STDOUT, close_fds=True,
         universal_newlines=True)
     ip = MakeIndexParser(run_object.stdout, verbose)
@@ -301,7 +302,7 @@ def run_makeglossaries(filename, verbose=False):
 
     """
     run_object = Popen("makeglossaries {}".format(
-                       shellquote(get_filename_without_extension(filename))),
+                       shellquote(splitext(filename)[0])),
                        shell=True, stdout=PIPE, stdin=PIPE, stderr=STDOUT,
                        close_fds=True, universal_newlines=True)
     bp = MakeGlossariesParser(run_object.stdout, verbose)
@@ -667,32 +668,6 @@ def construct_engine_command(ts_directives, tm_engine, packages):
     return engine
 
 
-def get_filename_without_extension(filename):
-    """Get the given file name without its extension.
-
-    If ``filename`` has no extensions then the unchanged file name will be
-    returned.
-
-    Arguments:
-
-        file_name
-
-            The path of some file, either with or without extension.
-
-    Returns: ``str``
-
-
-    Examples:
-
-        >>> print(get_filename_without_extension('../hello_world.tex'))
-        ../hello_world
-        >>> print(get_filename_without_extension('Makefile'))
-        Makefile
-
-    """
-    return splitext(filename)[0]
-
-
 def write_latexmkrc(engine, options, location='/tmp/latexmkrc'):
     """Create a “latexmkrc” file that uses the proper engine and arguments.
 
@@ -813,7 +788,7 @@ def get_typesetting_data(filepath, tm_engine,
     typesetting_directives = find_tex_directives(filepath, ignore_warnings)
     filename, file_path = find_file_to_typeset(typesetting_directives,
                                                tex_file=filepath)
-    file_without_suffix = get_filename_without_extension(filename)
+    file_without_suffix = splitext(filename)[0]
     chdir(file_path)
     cache_filename = '.{}.lb'.format(file_without_suffix)
     typesetting_data = get_cached_data()
@@ -1051,23 +1026,9 @@ if __name__ == '__main__':
         tex_status, fatal_error, number_errors, number_warnings = status
 
     elif command == 'clean':
-        auxiliary_file_regex = (
-            '.*\.(acn|acr|alg|aux|bbl|bcf|blg|fdb_latexmk|fls|fmt|glg|glo|gls|'
-            'idx|ilg|ind|ini|ist|lb|log|out|maf|mtc|mtc1|nav|nlo|nls|pdfsync|'
-            'pytxcode|run.xml|snm|synctex.gz|toc)$')
-        command = ("find -E . -maxdepth 1 -type f -regex " +
-                   "'{}' -delete -print".format(auxiliary_file_regex))
-        removed_files = check_output(command, shell=True,
-                                     universal_newlines=True)
-        command = ("find -E . -maxdepth 1 -type d -regex " +
-                   "'./(pythontex-files-|_minted-).+' " +
-                   "-print -exec rm -r '{}' \;")
-        removed_files += check_output(command, shell=True,
-                                      universal_newlines=True)
-        # Remove leading './' to get nicer looking output
-        removed_files = removed_files.rstrip().replace('./', '').splitlines()
-        # Ignore cache file created by this script
-        if len(removed_files) > 1:
+        remove_cache_files()
+        removed_files = remove_auxiliary_files()
+        if removed_files:
             for removed_file in removed_files:
                 print('<p class"info">Removed {}</p>'.format(removed_file))
         else:

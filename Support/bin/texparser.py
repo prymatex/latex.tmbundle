@@ -21,7 +21,7 @@ from sys import version_info
 
 from parsing import LaTexMkParser
 from tex import encodings
-from util import update_marks
+from gutter import update_marks
 
 # -- Module Import ------------------------------------------------------------
 
@@ -29,7 +29,7 @@ PYTHON2 = version_info <= (3, 0)
 
 if PYTHON2:
     import sys
-    reload(sys)
+    reload(sys)  # noqa
     sys.setdefaultencoding("utf-8")
 
 
