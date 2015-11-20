@@ -252,19 +252,19 @@ module LaTeX
     # doctest: Get the path of the tex binaries.
     #
     #  >> LaTeX.tex_path
-    #  => ""
+    #  => "/Library/TeX/texbin/"
     def tex_path
       # First try directly
       return '' if ENV['PATH'].split(':').find do |dir|
         File.exist? File.join(dir, 'kpsewhich')
       end
       # Then try some specific paths
-      ['/usr/texbin/', '/opt/local/bin/'].each do |location|
-        return location if File.exist?("#{location}kpsewhich")
+      ['/Library/TeX/texbin/', '/usr/texbin/', '/opt/local/bin/'].each do |dir|
+        return dir if File.exist?("#{dir}kpsewhich")
       end
       # If all else fails, rely on /etc/profile. For most people, we should
       # never make it here.
-      loc = `. /etc/profile; which kpsewhich`
+      loc = `. /etc/profile; which kpsewhich`.rstrip
       return loc.gsub(/kpsewhich$/, '') unless loc.match(/^no kpsewhich/)
       fail 'The tex binaries cannot be located!'
     end
