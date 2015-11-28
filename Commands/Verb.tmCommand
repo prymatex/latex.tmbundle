@@ -8,7 +8,7 @@
 	<string>#!/bin/bash
 [[ -f "${TM_SUPPORT_PATH}/lib/bash_init.sh" ]] &amp;&amp; . "${TM_SUPPORT_PATH}/lib/bash_init.sh"
 
-toggle_style.rb -style=textsc</string>
+toggle_style.rb -style=verb</string>
 	<key>fallbackInput</key>
 	<string>word</string>
 	<key>input</key>
@@ -16,9 +16,9 @@ toggle_style.rb -style=textsc</string>
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
-	<string>@K</string>
+	<string>~@k</string>
 	<key>name</key>
-	<string>Small Caps</string>
+	<string>Verb</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
@@ -28,9 +28,9 @@ toggle_style.rb -style=textsc</string>
 	<key>scope</key>
 	<string>text.tex.latex - source</string>
 	<key>semanticClass</key>
-	<string>style.alternate.small_caps.latex</string>
+	<string>style.alternate.verb.latex</string>
 	<key>uuid</key>
-	<string>9B3C2535-5CB7-43B8-9A8E-BCAB1085A245</string>
+	<string>6B5C138A-1951-4AD2-BE95-52E498661029</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>
